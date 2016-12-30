@@ -261,7 +261,7 @@ class TestInterpreterStack(IsTestBase):
     def test_stack(self):
         self.assertTrue(len(mod.st) >= 5)
         self.assertEqual(revise(*mod.st[0][1:]),
-             (modfile, 16, 'eggs', ['    st = inspect.stack()\n'], 0))
+             (modfile, 16, 'eggs', ['    st = inspect2.stack()\n'], 0))
         self.assertEqual(revise(*mod.st[1][1:]),
              (modfile, 9, 'spam', ['    eggs(b + d, c + f)\n'], 0))
         self.assertEqual(revise(*mod.st[2][1:]),
@@ -274,7 +274,7 @@ class TestInterpreterStack(IsTestBase):
         self.assertEqual(record.lineno, 16)
         self.assertEqual(record.filename, mod.__file__)
         self.assertEqual(record.function, 'eggs')
-        self.assertIn('inspect.stack()', record.code_context[0])
+        self.assertIn('inspect2.stack()', record.code_context[0])
         self.assertEqual(record.index, 0)
 
     def test_trace(self):

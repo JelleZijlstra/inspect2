@@ -1,7 +1,7 @@
 # line 1
 'A module docstring.'
 
-import sys, inspect
+import sys, inspect2
 # line 5
 
 # line 7
@@ -12,8 +12,8 @@ def spam(a, b, c, d=3, e=4, f=5, *g, **h):
 def eggs(x, y):
     "A docstring."
     global fr, st
-    fr = inspect.currentframe()
-    st = inspect.stack()
+    fr = inspect2.currentframe()
+    st = inspect2.stack()
     p = x
     q = y / 0
 
@@ -43,7 +43,7 @@ class StupidGit:
             spam(a, b, c)
         except:
             self.ex = sys.exc_info()
-            self.tr = inspect.trace()
+            self.tr = inspect2.trace()
 
     @property
     def contradiction(self):
