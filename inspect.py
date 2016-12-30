@@ -52,9 +52,11 @@ from collections import namedtuple, OrderedDict
 
 # Create constants for the compiler flags in Include/code.h
 # We try to get them from dis to avoid duplication
+_flags = set()
 mod_dict = globals()
 for k, v in dis.COMPILER_FLAG_NAMES.items():
     mod_dict["CO_" + v] = k
+    _flags.add("CO_" + v)
 
 # See Include/object.h
 TPFLAGS_IS_ABSTRACT = 1 << 20
@@ -184,18 +186,33 @@ def iscoroutinefunction(object):
     return bool((isfunction(object) or ismethod(object)) and
                 object.__code__.co_flags & CO_COROUTINE)
 
-def isasyncgenfunction(object):
-    """Return true if the object is an asynchronous generator function.
+if 'CO_ASYNC_GENERATOR' in _flags:
+    # Python 3.6+
+    def isasyncgenfunction(object):
+        """Return true if the object is an asynchronous generator function.
 
-    Asynchronous generator functions are defined with "async def"
-    syntax and have "yield" expressions in their body.
-    """
-    return bool((isfunction(object) or ismethod(object)) and
-                object.__code__.co_flags & CO_ASYNC_GENERATOR)
+        Asynchronous generator functions are defined with "async def"
+        syntax and have "yield" expressions in their body.
+        """
+        return bool((isfunction(object) or ismethod(object)) and
+                    object.__code__.co_flags & CO_ASYNC_GENERATOR)
+else:
+    def isasyncgenfunction(object):
+        """Return true if the object is an asynchronous generator function.
 
-def isasyncgen(object):
-    """Return true if the object is an asynchronous generator."""
-    return isinstance(object, types.AsyncGeneratorType)
+        Asynchronous generator functions are defined with "async def"
+        syntax and have "yield" expressions in their body.
+        """
+        return False
+
+if hasattr(types, 'AsyncGeneratorType'):
+    def isasyncgen(object):
+        """Return true if the object is an asynchronous generator."""
+        return isinstance(object, types.AsyncGeneratorType)
+else:
+    def isasyncgen(object):
+        """Return true if the object is an asynchronous generator."""
+        return False
 
 def isgenerator(object):
     """Return true if the object is a generator.

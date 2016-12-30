@@ -57,6 +57,33 @@ def revise(filename, *args):
 
 git = mod.StupidGit()
 
+def generator_function_example(self):
+    for i in range(2):
+        yield i
+
+try:
+    exec("""
+async def async_generator_function_example(self):
+    async for i in range(2):
+        yield i
+""")
+except SyntaxError:
+    HAS_ASYNC_GEN = False
+else:
+    HAS_ASYNC_GEN = True
+
+async def coroutine_function_example(self):
+    return 'spam'
+
+@types.coroutine
+def gen_coroutine_function_example(self):
+    yield
+    return 'spam'
+
+class EqualsToAll:
+    def __eq__(self, other):
+        return True
+
 class IsTestBase(unittest.TestCase):
     predicates = set([inspect.isbuiltin, inspect.isclass, inspect.iscode,
                       inspect.isframe, inspect.isfunction, inspect.ismethod,
@@ -76,26 +103,6 @@ class IsTestBase(unittest.TestCase):
                other == inspect.isfunction:
                 continue
             self.assertFalse(other(obj), 'not %s(%s)' % (other.__name__, exp))
-
-def generator_function_example(self):
-    for i in range(2):
-        yield i
-
-async def async_generator_function_example(self):
-    async for i in range(2):
-        yield i
-
-async def coroutine_function_example(self):
-    return 'spam'
-
-@types.coroutine
-def gen_coroutine_function_example(self):
-    yield
-    return 'spam'
-
-class EqualsToAll:
-    def __eq__(self, other):
-        return True
 
 class TestPredicates(IsTestBase):
 
@@ -125,10 +132,11 @@ class TestPredicates(IsTestBase):
         self.istest(inspect.isdatadescriptor, 'collections.defaultdict.default_factory')
         self.istest(inspect.isgenerator, '(x for x in range(2))')
         self.istest(inspect.isgeneratorfunction, 'generator_function_example')
-        self.istest(inspect.isasyncgen,
-                    'async_generator_function_example(1)')
-        self.istest(inspect.isasyncgenfunction,
-                    'async_generator_function_example')
+        if HAS_ASYNC_GEN:
+            self.istest(inspect.isasyncgen,
+                        'async_generator_function_example(1)')
+            self.istest(inspect.isasyncgenfunction,
+                        'async_generator_function_example')
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
