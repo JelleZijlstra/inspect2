@@ -180,6 +180,7 @@ class TestPredicates(IsTestBase):
 
         coro.close(); gen_coro.close() # silence warnings
 
+    @unittest.skipIf(not HAS_TYPES_COROUTINE, 'requires coroutines to exist')
     def test_isawaitable(self):
         def gen(): yield
         self.assertFalse(inspect.isawaitable(gen()))
@@ -2065,8 +2066,9 @@ class TestSignatureObject(unittest.TestCase):
         test_unbound_method(dict.__delitem__)
         test_unbound_method(property.__delete__)
 
-        # Regression test for issue #20586
-        test_callable(_testcapi.docstring_with_signature_but_no_doc)
+        if hasattr('_testcapi', 'docstring_with_signature_but_no_doc'):
+            # Regression test for issue #20586
+            test_callable(_testcapi.docstring_with_signature_but_no_doc)
 
     @cpython_only
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
