@@ -3,7 +3,7 @@ import collections
 import datetime
 import functools
 import importlib
-import inspect
+import inspect2 as inspect
 import io
 import linecache
 import os
@@ -2115,7 +2115,7 @@ class TestSignatureObject(unittest.TestCase):
                 return True
             return _orig_isdesc(obj)
 
-        with unittest.mock.patch('inspect.ismethoddescriptor', _isdesc):
+        with unittest.mock.patch('inspect2.ismethoddescriptor', _isdesc):
             builtin_func = funclike(func)
             # Make sure that our mock setup is working
             self.assertFalse(inspect.ismethoddescriptor(builtin_func))
