@@ -71,6 +71,3 @@ class FesteringGob(MalodorousPervert, ParrotDroppings):
     @property
     def contradiction(self):
         pass
-
-async def lobbest(grenade):
-    pass

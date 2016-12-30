@@ -178,13 +178,22 @@ def isgeneratorfunction(object):
     return bool((isfunction(object) or ismethod(object)) and
                 object.__code__.co_flags & CO_GENERATOR)
 
-def iscoroutinefunction(object):
-    """Return true if the object is a coroutine function.
+if 'CO_COROUTINE' in _flags:
+    # Python 3.5+
+    def iscoroutinefunction(object):
+        """Return true if the object is a coroutine function.
 
-    Coroutine functions are defined with "async def" syntax.
-    """
-    return bool((isfunction(object) or ismethod(object)) and
-                object.__code__.co_flags & CO_COROUTINE)
+        Coroutine functions are defined with "async def" syntax.
+        """
+        return bool((isfunction(object) or ismethod(object)) and
+                    object.__code__.co_flags & CO_COROUTINE)
+else:
+    def iscoroutinefunction(object):
+        """Return true if the object is a coroutine function.
+
+        Coroutine functions are defined with "async def" syntax.
+        """
+        return False
 
 if 'CO_ASYNC_GENERATOR' in _flags:
     # Python 3.6+
@@ -206,6 +215,7 @@ else:
         return False
 
 if hasattr(types, 'AsyncGeneratorType'):
+    # Python 3.6+
     def isasyncgen(object):
         """Return true if the object is an asynchronous generator."""
         return isinstance(object, types.AsyncGeneratorType)
@@ -231,16 +241,26 @@ def isgenerator(object):
         throw           used to raise an exception inside the generator"""
     return isinstance(object, types.GeneratorType)
 
-def iscoroutine(object):
-    """Return true if the object is a coroutine."""
-    return isinstance(object, types.CoroutineType)
+if hasattr(types, 'CoroutineType'):
+    # Python 3.5+
+    def iscoroutine(object):
+        """Return true if the object is a coroutine."""
+        return isinstance(object, types.CoroutineType)
 
-def isawaitable(object):
-    """Return true if object can be passed to an ``await`` expression."""
-    return (isinstance(object, types.CoroutineType) or
-            isinstance(object, types.GeneratorType) and
-                bool(object.gi_code.co_flags & CO_ITERABLE_COROUTINE) or
-            isinstance(object, collections.abc.Awaitable))
+    def isawaitable(object):
+        """Return true if object can be passed to an ``await`` expression."""
+        return (isinstance(object, types.CoroutineType) or
+                isinstance(object, types.GeneratorType) and
+                    bool(object.gi_code.co_flags & CO_ITERABLE_COROUTINE) or
+                isinstance(object, collections.abc.Awaitable))
+else:
+    def iscoroutine(object):
+        """Return true if the object is a coroutine."""
+        return False
+
+    def isawaitable(object):
+        """Return true if object can be passed to an ``await`` expression."""
+        return False
 
 def istraceback(object):
     """Return true if the object is a traceback.

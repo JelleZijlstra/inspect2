@@ -71,13 +71,22 @@ except SyntaxError:
 else:
     HAS_ASYNC_GEN = True
 
+try:
+    exec("""
 async def coroutine_function_example(self):
     return 'spam'
+""")
+except SyntaxError:
+    HAS_ASYNC_DEF = False
+else:
+    HAS_ASYNC_DEF = True
 
-@types.coroutine
-def gen_coroutine_function_example(self):
-    yield
-    return 'spam'
+HAS_TYPES_COROUTINE = hasattr(types, 'coroutine')
+if HAS_TYPES_COROUTINE:
+    @types.coroutine
+    def gen_coroutine_function_example(self):
+        yield
+        return 'spam'
 
 class EqualsToAll:
     def __eq__(self, other):
@@ -137,16 +146,18 @@ class TestPredicates(IsTestBase):
             self.istest(inspect.isasyncgenfunction,
                         'async_generator_function_example')
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            self.istest(inspect.iscoroutine, 'coroutine_function_example(1)')
-            self.istest(inspect.iscoroutinefunction, 'coroutine_function_example')
+        if HAS_ASYNC_DEF:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                self.istest(inspect.iscoroutine, 'coroutine_function_example(1)')
+                self.istest(inspect.iscoroutinefunction, 'coroutine_function_example')
 
         if hasattr(types, 'MemberDescriptorType'):
             self.istest(inspect.ismemberdescriptor, 'datetime.timedelta.days')
         else:
             self.assertFalse(inspect.ismemberdescriptor(datetime.timedelta.days))
 
+    @unittest.skipIf(not HAS_TYPES_COROUTINE, 'requires coroutines to exist')
     def test_iscoroutine(self):
         gen_coro = gen_coroutine_function_example(1)
         coro = coroutine_function_example(1)
@@ -351,8 +362,13 @@ class TestRetrievingSourceCode(GetSourceBase):
     def test_getfunctions(self):
         functions = inspect.getmembers(mod, inspect.isfunction)
         self.assertEqual(functions, [('eggs', mod.eggs),
-                                     ('lobbest', mod.lobbest),
                                      ('spam', mod.spam)])
+
+    if HAS_ASYNC_DEF:
+        def test_getfunctions_async(self):
+            from . import async_inspect_fodder
+            functions = inspect.getmembers(async_inspect_fodder, inspect.isfunction)
+            self.assertEqual(functions, [('lobbest', async_inspect_fodder.lobbest)])
 
     @unittest.skipIf(sys.flags.optimize >= 2,
                      "Docstrings are omitted with -O2 and above")
@@ -409,7 +425,6 @@ class TestRetrievingSourceCode(GetSourceBase):
     def test_getsource(self):
         self.assertSourceEqual(git.abuse, 29, 39)
         self.assertSourceEqual(mod.StupidGit, 21, 51)
-        self.assertSourceEqual(mod.lobbest, 75, 76)
 
     def test_getsourcefile(self):
         self.assertEqual(normcase(inspect.getsourcefile(mod.spam)), modfile)
@@ -466,6 +481,15 @@ class TestRetrievingSourceCode(GetSourceBase):
 
     def test_getsource_on_code_object(self):
         self.assertSourceEqual(mod.eggs.__code__, 12, 18)
+
+if HAS_ASYNC_DEF:
+    from . import async_inspect_fodder
+
+    class TestAsyncSourceCode(GetSourceBase):
+        mod = async_inspect_fodder
+
+        def test_getsource(self):
+            self.assertSourceEqual(async_inspect_fodder.lobbest, 2, 3)
 
 class TestDecorators(GetSourceBase):
     fodderModule = mod2
@@ -1751,6 +1775,7 @@ class TestGetGeneratorState(unittest.TestCase):
         self.assertRaises(TypeError, inspect.getgeneratorlocals, (2,3))
 
 
+@unittest.skipIf(not HAS_ASYNC_DEF, "requires coroutines to exist")
 class TestGetCoroutineState(unittest.TestCase):
 
     def setUp(self):
@@ -1758,9 +1783,13 @@ class TestGetCoroutineState(unittest.TestCase):
         def number_coroutine():
             for number in range(5):
                 yield number
-        async def coroutine():
-            await number_coroutine()
-        self.coroutine = coroutine()
+
+        ns = {'number_coroutine': number_coroutine}
+        exec("""
+async def coroutine():
+    await number_coroutine()
+""", ns, ns)
+        self.coroutine = ns['coroutine']()
 
     def tearDown(self):
         self.coroutine.close()
@@ -1797,22 +1826,29 @@ class TestGetCoroutineState(unittest.TestCase):
             self.assertIn(name, repr(state))
             self.assertIn(name, str(state))
 
-    def test_getcoroutinelocals(self):
-        @types.coroutine
-        def gencoro():
-            yield
+    try:
+        exec("""
+def test_getcoroutinelocals(self):
+    @types.coroutine
+    def gencoro():
+        yield
 
-        gencoro = gencoro()
-        async def func(a=None):
-            b = 'spam'
-            await gencoro
+    gencoro = gencoro()
+    async def func(a=None):
+        b = 'spam'
+        await gencoro
 
-        coro = func()
-        self.assertEqual(inspect.getcoroutinelocals(coro),
-                         {'a': None, 'gencoro': gencoro})
-        coro.send(None)
-        self.assertEqual(inspect.getcoroutinelocals(coro),
-                         {'a': None, 'gencoro': gencoro, 'b': 'spam'})
+    coro = func()
+    self.assertEqual(inspect.getcoroutinelocals(coro),
+                     {'a': None, 'gencoro': gencoro})
+    coro.send(None)
+    self.assertEqual(inspect.getcoroutinelocals(coro),
+                     {'a': None, 'gencoro': gencoro, 'b': 'spam'})
+""")
+    except SyntaxError:
+        # if async def doesn't exist yet, ignore
+        if HAS_ASYNC_DEF:
+            raise
 
 
 class MySignature(inspect.Signature):
@@ -3585,8 +3621,8 @@ class TestMain(unittest.TestCase):
     def test_details(self):
         module = importlib.import_module('unittest')
         args = support.optim_args_from_interpreter_flags()
-        rc, out, err = assert_python_ok(*args, '-m', 'inspect',
-                                        'unittest', '--details')
+        args = list(args) + ['-m', 'inspect', 'unittest', '--details']
+        rc, out, err = assert_python_ok(*args)
         output = out.decode()
         # Just a quick sanity check on the output
         self.assertIn(module.__name__, output)
