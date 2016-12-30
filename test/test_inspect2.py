@@ -157,7 +157,7 @@ class TestPredicates(IsTestBase):
         else:
             self.assertFalse(inspect.ismemberdescriptor(datetime.timedelta.days))
 
-    @unittest.skipIf(not HAS_TYPES_COROUTINE, 'requires coroutines to exist')
+    @unittest.skipUnless(HAS_TYPES_COROUTINE, 'requires coroutines to exist')
     def test_iscoroutine(self):
         gen_coro = gen_coroutine_function_example(1)
         coro = coroutine_function_example(1)
@@ -180,7 +180,7 @@ class TestPredicates(IsTestBase):
 
         coro.close(); gen_coro.close() # silence warnings
 
-    @unittest.skipIf(not HAS_TYPES_COROUTINE, 'requires coroutines to exist')
+    @unittest.skipUnless(HAS_TYPES_COROUTINE, 'requires coroutines to exist')
     def test_isawaitable(self):
         def gen(): yield
         self.assertFalse(inspect.isawaitable(gen()))
@@ -746,15 +746,18 @@ class TestClassesAndFunctions(unittest.TestCase):
             @functools.wraps(mod.spam)
             def ham(self, x, y):
                 pass
-            pham = functools.partialmethod(ham)
+
+            if hasattr(functools, 'partialmethod'):
+                pham = functools.partialmethod(ham)
             @functools.wraps(mod.spam)
             def __call__(self, x, y):
                 pass
         check_method(C())
         check_method(C.ham)
         check_method(C().ham)
-        check_method(C.pham)
-        check_method(C().pham)
+        if hasattr(functools, 'partialmethod'):
+            check_method(C.pham)
+            check_method(C().pham)
 
         class C_new:
             @functools.wraps(mod.spam)
@@ -806,6 +809,8 @@ class TestClassesAndFunctions(unittest.TestCase):
                      "Signature information for builtins requires docstrings")
     def test_getfullagrspec_builtin_func(self):
         import _testcapi
+        if not hasattr(_testcapi, 'docstring_with_signature_with_defaults'):
+            raise unittest.SkipTest('requires docstring_with_signature_with_defaults')
         builtin = _testcapi.docstring_with_signature_with_defaults
         spec = inspect.getfullargspec(builtin)
         self.assertEqual(spec.defaults[0], 'avocado')
@@ -815,6 +820,9 @@ class TestClassesAndFunctions(unittest.TestCase):
                      "Signature information for builtins requires docstrings")
     def test_getfullagrspec_builtin_func_no_signature(self):
         import _testcapi
+        if not hasattr(_testcapi, 'docstring_no_signature'):
+            raise unittest.SkipTest('requires docstring_no_signature')
+
         builtin = _testcapi.docstring_no_signature
         with self.assertRaises(TypeError):
             inspect.getfullargspec(builtin)
@@ -913,6 +921,7 @@ class TestClassesAndFunctions(unittest.TestCase):
             if isinstance(builtin, type):
                 inspect.classify_class_attrs(builtin)
 
+    @unittest.skipUnless(hasattr(types, 'DynamicClassAttribute'), 'requires DynamicClassAttribute')
     def test_classify_DynamicClassAttribute(self):
         class Meta(type):
             def __getattr__(self, name):
@@ -1053,6 +1062,7 @@ class TestClassesAndFunctions(unittest.TestCase):
         self.assertIn(('f', b.f), inspect.getmembers(b))
         self.assertIn(('f', b.f), inspect.getmembers(b, inspect.ismethod))
 
+    @unittest.skipUnless(hasattr(types, 'DynamicClassAttribute'), 'requires DynamicClassAttribute')
     def test_getmembers_VirtualAttribute(self):
         class M(type):
             def __getattr__(cls, name):
@@ -1476,6 +1486,7 @@ class TestGetattrStatic(unittest.TestCase):
 
         self.assertEqual(inspect.getattr_static(Thing, 'x'), Thing.x)
 
+    @unittest.skipUnless(hasattr(types, 'DynamicClassAttribute'), 'requires DynamicClassAttribute')
     def test_classVirtualAttribute(self):
         class Thing(object):
             @types.DynamicClassAttribute
@@ -1776,7 +1787,7 @@ class TestGetGeneratorState(unittest.TestCase):
         self.assertRaises(TypeError, inspect.getgeneratorlocals, (2,3))
 
 
-@unittest.skipIf(not HAS_ASYNC_DEF, "requires coroutines to exist")
+@unittest.skipUnless(HAS_ASYNC_DEF, "requires coroutines to exist")
 class TestGetCoroutineState(unittest.TestCase):
 
     def setUp(self):
@@ -2017,18 +2028,19 @@ class TestSignatureObject(unittest.TestCase):
                 self.assertNotEqual(list(signature.parameters.values())[0].name, 'self')
             return signature
 
-        signature = test_callable(_testcapi.docstring_with_signature_with_defaults)
-        def p(name): return signature.parameters[name].default
-        self.assertEqual(p('s'), 'avocado')
-        self.assertEqual(p('b'), b'bytes')
-        self.assertEqual(p('d'), 3.14)
-        self.assertEqual(p('i'), 35)
-        self.assertEqual(p('n'), None)
-        self.assertEqual(p('t'), True)
-        self.assertEqual(p('f'), False)
-        self.assertEqual(p('local'), 3)
-        self.assertEqual(p('sys'), sys.maxsize)
-        self.assertEqual(p('exp'), sys.maxsize - 1)
+        if hasattr('_testcapi', 'docstring_with_signature_with_defaults'):
+            signature = test_callable(_testcapi.docstring_with_signature_with_defaults)
+            def p(name): return signature.parameters[name].default
+            self.assertEqual(p('s'), 'avocado')
+            self.assertEqual(p('b'), b'bytes')
+            self.assertEqual(p('d'), 3.14)
+            self.assertEqual(p('i'), 35)
+            self.assertEqual(p('n'), None)
+            self.assertEqual(p('t'), True)
+            self.assertEqual(p('f'), False)
+            self.assertEqual(p('local'), 3)
+            self.assertEqual(p('sys'), sys.maxsize)
+            self.assertEqual(p('exp'), sys.maxsize - 1)
 
         test_callable(object)
 
@@ -2472,6 +2484,7 @@ class TestSignatureObject(unittest.TestCase):
                            ('kwargs', ..., ..., 'var_keyword')),
                          ...))
 
+    @unittest.skipUnless(hasattr(functools, 'partialmethod'), 'requires partialmethod')
     def test_signature_on_partialmethod(self):
         from functools import partialmethod
 

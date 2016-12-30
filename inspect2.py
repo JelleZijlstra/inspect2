@@ -405,10 +405,11 @@ def classify_class_attrs(cls):
     # :dd any DynamicClassAttributes to the list of names;
     # this may result in duplicate entries if, for example, a virtual
     # attribute with the same name as a DynamicClassAttribute exists.
-    for base in mro:
-        for k, v in base.__dict__.items():
-            if isinstance(v, types.DynamicClassAttribute):
-                names.append(k)
+    if hasattr(types, 'DynamicClassAttribute'):
+        for base in mro:
+            for k, v in base.__dict__.items():
+                if isinstance(v, types.DynamicClassAttribute):
+                    names.append(k)
     result = []
     processed = set()
 
