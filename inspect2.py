@@ -34,7 +34,6 @@ __author__ = ('Ka-Ping Yee <ping@lfw.org>',
 import ast
 import dis
 import collections.abc
-import enum
 import importlib.machinery
 import itertools
 import linecache
@@ -2384,15 +2383,34 @@ class _empty:
     """Marker object for Signature.empty and Parameter.empty."""
 
 
-class _ParameterKind(enum.IntEnum):
-    POSITIONAL_ONLY = 0
-    POSITIONAL_OR_KEYWORD = 1
-    VAR_POSITIONAL = 2
-    KEYWORD_ONLY = 3
-    VAR_KEYWORD = 4
+try:
+    import enum
+except ImportError:
+    class _NamedConstant(int):
+        def __new__(self, value, name):
+            val = super().__new__(_NamedConstant, value)
+            val._name = name
+            return val
 
-    def __str__(self):
-        return self._name_
+        def __str__(self):
+            return self._name
+
+    class _ParameterKind(object):
+        POSITIONAL_ONLY = _NamedConstant(0, 'POSITIONAL_ONLY')
+        POSITIONAL_OR_KEYWORD = _NamedConstant(1, 'POSITIONAL_OR_KEYWORD')
+        VAR_POSITIONAL = _NamedConstant(2, 'VAR_POSITIONAL')
+        KEYWORD_ONLY = _NamedConstant(3, 'KEYWORD_ONLY')
+        VAR_KEYWORD = _NamedConstant(4, 'VAR_KEYWORD')
+else:
+    class _ParameterKind(enum.IntEnum):
+        POSITIONAL_ONLY = 0
+        POSITIONAL_OR_KEYWORD = 1
+        VAR_POSITIONAL = 2
+        KEYWORD_ONLY = 3
+        VAR_KEYWORD = 4
+
+        def __str__(self):
+            return self._name_
 
 
 _POSITIONAL_ONLY         = _ParameterKind.POSITIONAL_ONLY
