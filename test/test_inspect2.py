@@ -29,7 +29,7 @@ from . import inspect_fodder2 as mod2
 from . import support
 from .support import (
     assert_python_ok, assert_python_failure, cpython_only, DirsOnSysPath, MISSING_C_DOCSTRINGS,
-    ready_to_import, run_unittest, TESTFN
+    maybe_subtest, ready_to_import, run_unittest, TESTFN
 )
 
 
@@ -1942,7 +1942,7 @@ class TestSignatureObject(unittest.TestCase):
         sig = inspect.signature(foo_partial)
 
         for ver in range(pickle.HIGHEST_PROTOCOL + 1):
-            with self.subTest(pickle_ver=ver, subclass=False):
+            with maybe_subtest(self, pickle_ver=ver, subclass=False):
                 sig_pickled = pickle.loads(pickle.dumps(sig, ver))
                 self.assertEqual(sig, sig_pickled)
 
@@ -1956,7 +1956,7 @@ class TestSignatureObject(unittest.TestCase):
         self.assertTrue(isinstance(mysig.parameters['z'], MyParameter))
 
         for ver in range(pickle.HIGHEST_PROTOCOL + 1):
-            with self.subTest(pickle_ver=ver, subclass=True):
+            with maybe_subtest(self, pickle_ver=ver, subclass=True):
                 sig_pickled = pickle.loads(pickle.dumps(mysig, ver))
                 self.assertEqual(mysig, sig_pickled)
                 self.assertTrue(isinstance(sig_pickled, MySignature))
@@ -3387,7 +3387,7 @@ class TestBoundArguments(unittest.TestCase):
         ba = sig.bind(20, 30, z={})
 
         for ver in range(pickle.HIGHEST_PROTOCOL + 1):
-            with self.subTest(pickle_ver=ver):
+            with maybe_subtest(self, pickle_ver=ver):
                 ba_pickled = pickle.loads(pickle.dumps(ba, ver))
                 self.assertEqual(ba, ba_pickled)
 

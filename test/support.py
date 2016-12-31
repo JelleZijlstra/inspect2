@@ -15,6 +15,20 @@ import tempfile
 import unittest
 import warnings
 
+@contextlib.contextmanager
+def maybe_subtest(test_case, **kwargs):
+    """Uses test_case.subTest if available."""
+    if hasattr(test_case, 'subTest'):
+        with test_case.subTest(**kwargs):
+            yield
+    else:
+        try:
+            yield
+        except Exception:
+            # poor man's subtest support
+            print('failed in subtest: {}'.format(kwargs))
+            raise
+
 # Copied from subprocess._optim_args_from_interpreter_flags in 3.6
 def optim_args_from_interpreter_flags():
     """Return a list of command-line arguments reproducing the current
