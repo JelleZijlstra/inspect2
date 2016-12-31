@@ -487,7 +487,7 @@ if HAS_ASYNC_DEF:
     from . import async_inspect_fodder
 
     class TestAsyncSourceCode(GetSourceBase):
-        mod = async_inspect_fodder
+        fodderModule = async_inspect_fodder
 
         def test_getsource(self):
             self.assertSourceEqual(async_inspect_fodder.lobbest, 2, 3)
@@ -3488,6 +3488,18 @@ class TestSignaturePrivateHelpers(unittest.TestCase):
             None)
 
 
+def func(a, b):
+    return a + b
+wrapper = func
+for __ in range(10):
+    @functools.wraps(wrapper)
+    def wrapper():
+        pass
+# This behavior was changed in 3.4; see
+# https://bugs.python.org/issue17482
+HAVE_MULTILEVEL_WRAPPED = wrapper.__wrapped__ is not func
+
+
 class TestUnwrap(unittest.TestCase):
 
     def test_unwrap_one(self):
@@ -3504,9 +3516,11 @@ class TestUnwrap(unittest.TestCase):
             @functools.wraps(wrapper)
             def wrapper():
                 pass
-        self.assertIsNot(wrapper.__wrapped__, func)
+        if HAVE_MULTILEVEL_WRAPPED:
+            self.assertIsNot(wrapper.__wrapped__, func)
         self.assertIs(inspect.unwrap(wrapper), func)
 
+    @unittest.skipUnless(HAVE_MULTILEVEL_WRAPPED, 'does not make sense without multi-level __wrapped__')
     def test_stop(self):
         def func1(a, b):
             return a + b
