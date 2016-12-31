@@ -2409,6 +2409,9 @@ except ImportError:
         def __str__(self):
             return self._name
 
+        def __reduce__(self):
+            return (type(self), (int(self), self._name))
+
     class _ParameterKind(object):
         POSITIONAL_ONLY = _NamedConstant(0, 'POSITIONAL_ONLY')
         POSITIONAL_OR_KEYWORD = _NamedConstant(1, 'POSITIONAL_OR_KEYWORD')
