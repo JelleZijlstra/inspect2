@@ -788,6 +788,8 @@ class TestClassesAndFunctions(unittest.TestCase):
         spec = inspect.getfullargspec(test)
         self.assertEqual(test.__annotations__, spec.annotations)
 
+    @unittest.skipUnless(hasattr(_pickle.Pickler.dump, '__text__signature__'),
+                         "requires __text_signature__ on builtins")
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
                      "Signature information for builtins requires docstrings")
     def test_getfullargspec_builtin_methods(self):
@@ -3576,7 +3578,7 @@ class TestUnwrap(unittest.TestCase):
 class TestMain(unittest.TestCase):
     def test_only_source(self):
         module = importlib.import_module('unittest')
-        rc, out, err = assert_python_ok('-m', 'inspect',
+        rc, out, err = assert_python_ok('-m', 'inspect2',
                                         'unittest')
         lines = out.decode().splitlines()
         # ignore the final newline
@@ -3593,7 +3595,7 @@ class TestMain(unittest.TestCase):
     @unittest.skipIf(ThreadPoolExecutor is None,
             'threads required to test __qualname__ for source files')
     def test_qualname_source(self):
-        rc, out, err = assert_python_ok('-m', 'inspect',
+        rc, out, err = assert_python_ok('-m', 'inspect2',
                                      'concurrent.futures:ThreadPoolExecutor')
         lines = out.decode().splitlines()
         # ignore the final newline
@@ -3603,7 +3605,7 @@ class TestMain(unittest.TestCase):
 
     def test_builtins(self):
         module = importlib.import_module('unittest')
-        _, out, err = assert_python_failure('-m', 'inspect',
+        _, out, err = assert_python_failure('-m', 'inspect2',
                                             'sys')
         lines = err.decode().splitlines()
         self.assertEqual(lines, ["Can't get info for builtin modules."])
@@ -3611,7 +3613,7 @@ class TestMain(unittest.TestCase):
     def test_details(self):
         module = importlib.import_module('unittest')
         args = support.optim_args_from_interpreter_flags()
-        args = list(args) + ['-m', 'inspect', 'unittest', '--details']
+        args = list(args) + ['-m', 'inspect2', 'unittest', '--details']
         rc, out, err = assert_python_ok(*args)
         output = out.decode()
         # Just a quick sanity check on the output

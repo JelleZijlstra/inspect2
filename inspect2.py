@@ -2409,6 +2409,9 @@ except ImportError:
         def __str__(self):
             return self._name
 
+        def __repr__(self):
+            return '<_ParameterKind.{}: {}>'.format(self._name, int(self))
+
         def __reduce__(self):
             return (type(self), (int(self), self._name))
 

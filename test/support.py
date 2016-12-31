@@ -357,7 +357,7 @@ def interpreter_requires_environment():
         # Try running an interpreter with -E to see if it works or not.
         try:
             subprocess.check_call([sys.executable, '-E',
-                                   '-c', 'import sys; sys.exit(0)'])
+                                   '-c', 'import inspect2, sys; sys.exit(0)'])
         except subprocess.CalledProcessError:
             __cached_interp_requires_environment = True
         else:
@@ -380,6 +380,22 @@ def strip_python_stderr(stderr):
     return stderr
 
 # Executing the interpreter in a subprocess
+__cached_has_isolated_mode = None
+
+def has_isolated_mode():
+    global __cached_has_isolated_mode
+    if __cached_has_isolated_mode is not None:
+        return __cached_has_isolated_mode
+    cmdline = [sys.executable, '-I', '-c', 'import inspect2']
+    try:
+        subprocess.check_call(cmdline)
+    except subprocess.CalledProcessError:
+        __cached_has_isolated_mode = False
+    else:
+        __cached_has_isolated_mode = True
+    return __cached_has_isolated_mode
+
+
 def run_python_until_end(*args, **env_vars):
     env_required = interpreter_requires_environment()
     if '__isolated' in env_vars:
@@ -387,7 +403,7 @@ def run_python_until_end(*args, **env_vars):
     else:
         isolated = not env_vars and not env_required
     cmd_line = [sys.executable, '-X', 'faulthandler']
-    if isolated:
+    if isolated and has_isolated_mode():
         # isolated mode: ignore Python environment variables, ignore user
         # site-packages, and don't add the current directory to sys.path
         cmd_line.append('-I')
@@ -414,7 +430,10 @@ def run_python_until_end(*args, **env_vars):
         try:
             out, err = proc.communicate()
         finally:
-            proc.kill()
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass  # process may have already exited
             subprocess._cleanup()
     rc = proc.returncode
     err = strip_python_stderr(err)
