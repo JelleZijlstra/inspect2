@@ -1,3 +1,4 @@
+from __future__ import print_function
 import builtins
 import collections
 import datetime
@@ -11,6 +12,7 @@ from os.path import normcase
 import _pickle
 import pickle
 import shutil
+import six
 import sys
 import types
 import textwrap
@@ -55,6 +57,13 @@ def revise(filename, *args):
     return (normcase(filename),) + args
 
 git = mod.StupidGit()
+
+try:
+    exec('def f(x:int): pass')
+except SyntaxError:
+    HAS_ANNOTATIONS = False
+else:
+    HAS_ANNOTATIONS = True
 
 def generator_function_example(self):
     for i in range(2):
@@ -229,7 +238,7 @@ class TestPredicates(IsTestBase):
     def test_isabstract(self):
         from abc import ABCMeta, abstractmethod
 
-        class AbstractClassExample(metaclass=ABCMeta):
+        class AbstractClassExample(six.with_metaclass(ABCMeta)):
 
             @abstractmethod
             def foo(self):
@@ -447,7 +456,7 @@ class TestRetrievingSourceCode(GetSourceBase):
             @property
             def __module__(cls):
                 raise AttributeError
-        class C(metaclass=CM):
+        class C(six.with_metaclass(CM)):
             pass
         with self.assertRaises(TypeError):
             inspect.getfile(C)
@@ -456,7 +465,7 @@ class TestRetrievingSourceCode(GetSourceBase):
         from types import ModuleType
         name = '__inspect_dummy'
         m = sys.modules[name] = ModuleType(name)
-        m.__file__ = "<string>" # hopefully not a real filename...
+        m.__file__ = "<string>" # hopefully not a real filenameEllipsis
         m.__loader__ = "dummy"  # pretend the filename is understood by a loader
         exec("def x(): pass", m.__dict__)
         self.assertEqual(inspect.getsourcefile(m.x.__code__), '<string>')
@@ -779,14 +788,21 @@ class TestClassesAndFunctions(unittest.TestCase):
 
         self.assertFullArgSpecEquals(test, args_e=['spam'], formatted='(spam)')
 
+    @unittest.skipUnless(HAS_ANNOTATIONS, 'requires annotations')
     def test_getfullargspec_signature_annos(self):
-        def test(a:'spam') -> 'ham': pass
-        spec = inspect.getfullargspec(test)
-        self.assertEqual(test.__annotations__, spec.annotations)
+        ns = {}
+        exec("def test(a:'spam') -> 'ham': pass", ns, ns)
+        spec = inspect.getfullargspec(ns['test'])
+        self.assertEqual(ns['test'].__annotations__, spec.annotations)
 
         def test(): pass
         spec = inspect.getfullargspec(test)
         self.assertEqual(test.__annotations__, spec.annotations)
+
+    def test_getfullargspec_no_annos(self):
+        def test(): pass
+        spec = inspect.getfullargspec(test)
+        self.assertEqual({}, spec.annotations)
 
     @unittest.skipUnless(hasattr(_pickle.Pickler.dump, '__text__signature__'),
                          "requires __text_signature__ on builtins")
@@ -930,7 +946,7 @@ class TestClassesAndFunctions(unittest.TestCase):
                 if name == 'ham':
                     return 'spam'
                 return super().__getattr__(name)
-        class VA(metaclass=Meta):
+        class VA(six.with_metaclass(Meta)):
             @types.DynamicClassAttribute
             def ham(self):
                 return 'eggs'
@@ -959,7 +975,7 @@ class TestClassesAndFunctions(unittest.TestCase):
             fish = 'slap'
             def __dir__(self):
                 return ['__class__', '__module__', '__name__', 'fish']
-        class Class(metaclass=Meta):
+        class Class(six.with_metaclass(Meta)):
             pass
         should_find = inspect.Attribute('fish', 'data', Meta, 'slap')
         self.assertIn(should_find, inspect.classify_class_attrs(Class))
@@ -972,7 +988,7 @@ class TestClassesAndFunctions(unittest.TestCase):
                 if name =='BOOM':
                     return 42
                 return super().__getattr(name)
-        class Class(metaclass=Meta):
+        class Class(six.with_metaclass(Meta)):
             pass
         should_find = inspect.Attribute('BOOM', 'data', Meta, 42)
         self.assertIn(should_find, inspect.classify_class_attrs(Class))
@@ -1000,9 +1016,9 @@ class TestClassesAndFunctions(unittest.TestCase):
                 if name =='three':
                     return 3
                 return super().__getattr__(name)
-        class Class1(metaclass=Meta1):
+        class Class1(six.with_metaclass(Meta1)):
             pass
-        class Class2(Class1, metaclass=Meta3):
+        class Class2(six.with_metaclass(Meta3, Class1)):
             pass
 
         should_find1 = inspect.Attribute('one', 'data', Meta1, 1)
@@ -1016,7 +1032,7 @@ class TestClassesAndFunctions(unittest.TestCase):
         class M(type):
             def __dir__(cls):
                 return ['__class__', '__name__', 'missing']
-        class C(metaclass=M):
+        class C(six.with_metaclass(M)):
             pass
         attrs = [a[0] for a in inspect.classify_class_attrs(C)]
         self.assertNotIn('missing', attrs)
@@ -1071,7 +1087,7 @@ class TestClassesAndFunctions(unittest.TestCase):
                 if name == 'eggs':
                     return 'scrambled'
                 return super().__getattr__(name)
-        class A(metaclass=M):
+        class A(six.with_metaclass(M)):
             @types.DynamicClassAttribute
             def eggs(self):
                 return 'spam'
@@ -1082,7 +1098,7 @@ class TestClassesAndFunctions(unittest.TestCase):
         class M(type):
             def __dir__(cls):
                 return ['__class__', '__name__', 'missing']
-        class C(metaclass=M):
+        class C(six.with_metaclass(M)):
             pass
         attrs = [a[0] for a in inspect.getmembers(C)]
         self.assertNotIn('missing', attrs)
@@ -1385,10 +1401,15 @@ class TestGetcallargsFunctions(unittest.TestCase):
 
         # issue #20816: getcallargs() fails to iterate over non-existent
         # kwonlydefaults and raises a wrong TypeError
-        def f5(*, a): pass
-        with self.assertRaisesRegex(TypeError,
-                                    'missing 1 required keyword-only'):
-            inspect.getcallargs(f5)
+        try:
+            ns = {}
+            exec("def f5(*, a): pass", ns, ns)
+        except SyntaxError:
+            pass
+        else:
+            with self.assertRaisesRegex(TypeError,
+                                        'missing 1 required keyword-only'):
+                inspect.getcallargs(ns['f5'])
 
 
         # issue20817:
@@ -1522,13 +1543,13 @@ class TestGetattrStatic(unittest.TestCase):
     def test_metaclass(self):
         class meta(type):
             attr = 'foo'
-        class Thing(object, metaclass=meta):
+        class Thing(six.with_metaclass(meta, object)):
             pass
         self.assertEqual(inspect.getattr_static(Thing, 'attr'), 'foo')
 
         class sub(meta):
             pass
-        class OtherThing(object, metaclass=sub):
+        class OtherThing(six.with_metaclass(sub, object)):
             x = 3
         self.assertEqual(inspect.getattr_static(OtherThing, 'attr'), 'foo')
 
@@ -1555,7 +1576,7 @@ class TestGetattrStatic(unittest.TestCase):
 
         class OtherThing(Thing):
             pass
-        # it would be nice if this worked...
+        # it would be nice if this workedEllipsis
         # we get the descriptor instead of the instance attribute
         self.assertEqual(inspect.getattr_static(OtherThing(), 'x'), Thing.x)
 
@@ -1584,7 +1605,7 @@ class TestGetattrStatic(unittest.TestCase):
                 return 3
         class meta(type):
             d = descriptor()
-        class Thing(object, metaclass=meta):
+        class Thing(six.with_metaclass(meta, object)):
             pass
         self.assertEqual(inspect.getattr_static(Thing, 'd'), meta.__dict__['d'])
 
@@ -1614,7 +1635,7 @@ class TestGetattrStatic(unittest.TestCase):
         class Base(object):
             foo = 3
 
-        class Something(Base, metaclass=Meta):
+        class Something(six.with_metaclass(Meta, Base)):
             pass
 
         self.assertEqual(inspect.getattr_static(Something(), 'foo'), 3)
@@ -1658,7 +1679,7 @@ class TestGetattrStatic(unittest.TestCase):
             def __dict__(self):
                 self.executed = True
 
-        class Thing(metaclass=Meta):
+        class Thing(six.with_metaclass(Meta)):
             executed = False
 
             def __init__(self):
@@ -1680,10 +1701,10 @@ class TestGetattrStatic(unittest.TestCase):
                 self.executed = True
                 return dict(spam=42)
 
-        class Meta(type, metaclass=MetaMeta):
+        class Meta(six.with_metaclass(MetaMeta, type)):
             executed = False
 
-        class Thing(metaclass=Meta):
+        class Thing(six.with_metaclass(Meta)):
             pass
 
         with self.assertRaises(AttributeError):
@@ -1882,12 +1903,12 @@ class TestSignatureObject(unittest.TestCase):
     def signature(func, **kw):
         sig = inspect.signature(func, **kw)
         return (tuple((param.name,
-                       (... if param.default is param.empty else param.default),
-                       (... if param.annotation is param.empty
+                       (Ellipsis if param.default is param.empty else param.default),
+                       (Ellipsis if param.annotation is param.empty
                                                         else param.annotation),
                        str(param.kind).lower())
                                     for param in sig.parameters.values()),
-                (... if sig.return_annotation is sig.empty
+                (Ellipsis if sig.return_annotation is sig.empty
                                             else sig.return_annotation))
 
     def test_signature_object(self):
@@ -1979,35 +2000,35 @@ class TestSignatureObject(unittest.TestCase):
     def test_signature_on_noarg(self):
         def test():
             pass
-        self.assertEqual(self.signature(test), ((), ...))
+        self.assertEqual(self.signature(test), ((), Ellipsis))
 
     def test_signature_on_wargs(self):
         def test(a, b:'foo') -> 123:
             pass
         self.assertEqual(self.signature(test),
-                         ((('a', ..., ..., "positional_or_keyword"),
-                           ('b', ..., 'foo', "positional_or_keyword")),
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('b', Ellipsis, 'foo', "positional_or_keyword")),
                           123))
 
     def test_signature_on_wkwonly(self):
         def test(*, a:float, b:str) -> int:
             pass
         self.assertEqual(self.signature(test),
-                         ((('a', ..., float, "keyword_only"),
-                           ('b', ..., str, "keyword_only")),
+                         ((('a', Ellipsis, float, "keyword_only"),
+                           ('b', Ellipsis, str, "keyword_only")),
                            int))
 
     def test_signature_on_complex_args(self):
         def test(a, b:'foo'=10, *args:'bar', spam:'baz', ham=123, **kwargs:int):
             pass
         self.assertEqual(self.signature(test),
-                         ((('a', ..., ..., "positional_or_keyword"),
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('b', 10, 'foo', "positional_or_keyword"),
-                           ('args', ..., 'bar', "var_positional"),
-                           ('spam', ..., 'baz', "keyword_only"),
-                           ('ham', 123, ..., "keyword_only"),
-                           ('kwargs', ..., int, "var_keyword")),
-                          ...))
+                           ('args', Ellipsis, 'bar', "var_positional"),
+                           ('spam', Ellipsis, 'baz', "keyword_only"),
+                           ('ham', 123, Ellipsis, "keyword_only"),
+                           ('kwargs', Ellipsis, int, "var_keyword")),
+                          Ellipsis))
 
     @cpython_only
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
@@ -2163,9 +2184,9 @@ class TestSignatureObject(unittest.TestCase):
         fl = funclike(func)
         del fl.__defaults__
         self.assertEqual(self.signature(fl),
-                         ((('args', ..., ..., "var_positional"),
-                           ('kwargs', ..., ..., "var_keyword")),
-                           ...))
+                         ((('args', Ellipsis, Ellipsis, "var_positional"),
+                           ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                           Ellipsis))
 
         # Test with cython-like builtins:
         _orig_isdesc = inspect.ismethoddescriptor
@@ -2213,17 +2234,17 @@ class TestSignatureObject(unittest.TestCase):
                 pass
 
         self.assertEqual(self.signature(Test().m1),
-                         ((('arg1', ..., ..., "positional_or_keyword"),
-                           ('arg2', 1, ..., "positional_or_keyword")),
+                         ((('arg1', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('arg2', 1, Ellipsis, "positional_or_keyword")),
                           int))
 
         self.assertEqual(self.signature(Test().m2),
-                         ((('args', ..., ..., "var_positional"),),
-                          ...))
+                         ((('args', Ellipsis, Ellipsis, "var_positional"),),
+                          Ellipsis))
 
         self.assertEqual(self.signature(Test),
-                         ((('args', ..., ..., "var_positional"),),
-                          ...))
+                         ((('args', Ellipsis, Ellipsis, "var_positional"),),
+                          Ellipsis))
 
         with self.assertRaisesRegex(ValueError, 'invalid method signature'):
             self.signature(Test())
@@ -2237,8 +2258,8 @@ class TestSignatureObject(unittest.TestCase):
         def m1d(*args, **kwargs):
             pass
         self.assertEqual(self.signature(m1d),
-                         ((('arg1', ..., ..., "positional_or_keyword"),
-                           ('arg2', 1, ..., "positional_or_keyword")),
+                         ((('arg1', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('arg2', 1, Ellipsis, "positional_or_keyword")),
                           int))
 
     def test_signature_on_classmethod(self):
@@ -2249,15 +2270,15 @@ class TestSignatureObject(unittest.TestCase):
 
         meth = Test().foo
         self.assertEqual(self.signature(meth),
-                         ((('arg1', ..., ..., "positional_or_keyword"),
-                           ('arg2', 1, ..., "keyword_only")),
-                          ...))
+                         ((('arg1', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('arg2', 1, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         meth = Test.foo
         self.assertEqual(self.signature(meth),
-                         ((('arg1', ..., ..., "positional_or_keyword"),
-                           ('arg2', 1, ..., "keyword_only")),
-                          ...))
+                         ((('arg1', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('arg2', 1, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
     def test_signature_on_staticmethod(self):
         class Test:
@@ -2267,15 +2288,15 @@ class TestSignatureObject(unittest.TestCase):
 
         meth = Test().foo
         self.assertEqual(self.signature(meth),
-                         ((('cls', ..., ..., "positional_or_keyword"),
-                           ('arg', ..., ..., "keyword_only")),
-                          ...))
+                         ((('cls', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('arg', Ellipsis, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         meth = Test.foo
         self.assertEqual(self.signature(meth),
-                         ((('cls', ..., ..., "positional_or_keyword"),
-                           ('arg', ..., ..., "keyword_only")),
-                          ...))
+                         ((('cls', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('arg', Ellipsis, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
     def test_signature_on_partial(self):
         from functools import partial
@@ -2285,7 +2306,7 @@ class TestSignatureObject(unittest.TestCase):
         def test():
             pass
 
-        self.assertEqual(self.signature(partial(test)), ((), ...))
+        self.assertEqual(self.signature(partial(test)), ((), Ellipsis))
 
         with self.assertRaisesRegex(ValueError, "has incorrect arguments"):
             inspect.signature(partial(test, 1))
@@ -2297,90 +2318,90 @@ class TestSignatureObject(unittest.TestCase):
             pass
 
         self.assertEqual(self.signature(partial(test)),
-                         ((('a', ..., ..., "positional_or_keyword"),
-                           ('b', ..., ..., "positional_or_keyword"),
-                           ('c', ..., ..., "keyword_only"),
-                           ('d', ..., ..., "keyword_only")),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('b', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('c', Ellipsis, Ellipsis, "keyword_only"),
+                           ('d', Ellipsis, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 1)),
-                         ((('b', ..., ..., "positional_or_keyword"),
-                           ('c', ..., ..., "keyword_only"),
-                           ('d', ..., ..., "keyword_only")),
-                          ...))
+                         ((('b', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('c', Ellipsis, Ellipsis, "keyword_only"),
+                           ('d', Ellipsis, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 1, c=2)),
-                         ((('b', ..., ..., "positional_or_keyword"),
-                           ('c', 2, ..., "keyword_only"),
-                           ('d', ..., ..., "keyword_only")),
-                          ...))
+                         ((('b', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('c', 2, Ellipsis, "keyword_only"),
+                           ('d', Ellipsis, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, b=1, c=2)),
-                         ((('a', ..., ..., "positional_or_keyword"),
-                           ('b', 1, ..., "keyword_only"),
-                           ('c', 2, ..., "keyword_only"),
-                           ('d', ..., ..., "keyword_only")),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('b', 1, Ellipsis, "keyword_only"),
+                           ('c', 2, Ellipsis, "keyword_only"),
+                           ('d', Ellipsis, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 0, b=1, c=2)),
-                         ((('b', 1, ..., "keyword_only"),
-                           ('c', 2, ..., "keyword_only"),
-                           ('d', ..., ..., "keyword_only")),
-                          ...))
+                         ((('b', 1, Ellipsis, "keyword_only"),
+                           ('c', 2, Ellipsis, "keyword_only"),
+                           ('d', Ellipsis, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, a=1)),
-                         ((('a', 1, ..., "keyword_only"),
-                           ('b', ..., ..., "keyword_only"),
-                           ('c', ..., ..., "keyword_only"),
-                           ('d', ..., ..., "keyword_only")),
-                          ...))
+                         ((('a', 1, Ellipsis, "keyword_only"),
+                           ('b', Ellipsis, Ellipsis, "keyword_only"),
+                           ('c', Ellipsis, Ellipsis, "keyword_only"),
+                           ('d', Ellipsis, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         def test(a, *args, b, **kwargs):
             pass
 
         self.assertEqual(self.signature(partial(test, 1)),
-                         ((('args', ..., ..., "var_positional"),
-                           ('b', ..., ..., "keyword_only"),
-                           ('kwargs', ..., ..., "var_keyword")),
-                          ...))
+                         ((('args', Ellipsis, Ellipsis, "var_positional"),
+                           ('b', Ellipsis, Ellipsis, "keyword_only"),
+                           ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, a=1)),
-                         ((('a', 1, ..., "keyword_only"),
-                           ('b', ..., ..., "keyword_only"),
-                           ('kwargs', ..., ..., "var_keyword")),
-                          ...))
+                         ((('a', 1, Ellipsis, "keyword_only"),
+                           ('b', Ellipsis, Ellipsis, "keyword_only"),
+                           ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 1, 2, 3)),
-                         ((('args', ..., ..., "var_positional"),
-                           ('b', ..., ..., "keyword_only"),
-                           ('kwargs', ..., ..., "var_keyword")),
-                          ...))
+                         ((('args', Ellipsis, Ellipsis, "var_positional"),
+                           ('b', Ellipsis, Ellipsis, "keyword_only"),
+                           ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 1, 2, 3, test=True)),
-                         ((('args', ..., ..., "var_positional"),
-                           ('b', ..., ..., "keyword_only"),
-                           ('kwargs', ..., ..., "var_keyword")),
-                          ...))
+                         ((('args', Ellipsis, Ellipsis, "var_positional"),
+                           ('b', Ellipsis, Ellipsis, "keyword_only"),
+                           ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 1, 2, 3, test=1, b=0)),
-                         ((('args', ..., ..., "var_positional"),
-                           ('b', 0, ..., "keyword_only"),
-                           ('kwargs', ..., ..., "var_keyword")),
-                          ...))
+                         ((('args', Ellipsis, Ellipsis, "var_positional"),
+                           ('b', 0, Ellipsis, "keyword_only"),
+                           ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, b=0)),
-                         ((('a', ..., ..., "positional_or_keyword"),
-                           ('args', ..., ..., "var_positional"),
-                           ('b', 0, ..., "keyword_only"),
-                           ('kwargs', ..., ..., "var_keyword")),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('args', Ellipsis, Ellipsis, "var_positional"),
+                           ('b', 0, Ellipsis, "keyword_only"),
+                           ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(partial(test, b=0, test=1)),
-                         ((('a', ..., ..., "positional_or_keyword"),
-                           ('args', ..., ..., "var_positional"),
-                           ('b', 0, ..., "keyword_only"),
-                           ('kwargs', ..., ..., "var_keyword")),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('args', Ellipsis, Ellipsis, "var_positional"),
+                           ('b', 0, Ellipsis, "keyword_only"),
+                           ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                          Ellipsis))
 
         def test(a, b, c:int) -> 42:
             pass
@@ -2388,12 +2409,12 @@ class TestSignatureObject(unittest.TestCase):
         sig = test.__signature__ = inspect.signature(test)
 
         self.assertEqual(self.signature(partial(partial(test, 1))),
-                         ((('b', ..., ..., "positional_or_keyword"),
-                           ('c', ..., int, "positional_or_keyword")),
+                         ((('b', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('c', Ellipsis, int, "positional_or_keyword")),
                           42))
 
         self.assertEqual(self.signature(partial(partial(test, 1), 2)),
-                         ((('c', ..., int, "positional_or_keyword"),),
+                         ((('c', Ellipsis, int, "positional_or_keyword"),),
                           42))
 
         psig = inspect.signature(partial(partial(test, 1), 2))
@@ -2402,8 +2423,8 @@ class TestSignatureObject(unittest.TestCase):
             return a
         _foo = partial(partial(foo, a=10), a=20)
         self.assertEqual(self.signature(_foo),
-                         ((('a', 20, ..., "keyword_only"),),
-                          ...))
+                         ((('a', 20, Ellipsis, "keyword_only"),),
+                          Ellipsis))
         # check that we don't have any side-effects in signature(),
         # and the partial object is still functioning
         self.assertEqual(_foo(), 20)
@@ -2413,21 +2434,21 @@ class TestSignatureObject(unittest.TestCase):
         _foo = partial(partial(foo, 1, b=20), b=30)
 
         self.assertEqual(self.signature(_foo),
-                         ((('b', 30, ..., "keyword_only"),
-                           ('c', ..., ..., "keyword_only")),
-                          ...))
+                         ((('b', 30, Ellipsis, "keyword_only"),
+                           ('c', Ellipsis, Ellipsis, "keyword_only")),
+                          Ellipsis))
         self.assertEqual(_foo(c=10), (1, 30, 10))
 
         def foo(a, b, c, *, d):
             return a, b, c, d
         _foo = partial(partial(foo, d=20, c=20), b=10, d=30)
         self.assertEqual(self.signature(_foo),
-                         ((('a', ..., ..., "positional_or_keyword"),
-                           ('b', 10, ..., "keyword_only"),
-                           ('c', 20, ..., "keyword_only"),
-                           ('d', 30, ..., "keyword_only"),
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('b', 10, Ellipsis, "keyword_only"),
+                           ('c', 20, Ellipsis, "keyword_only"),
+                           ('d', 30, Ellipsis, "keyword_only"),
                            ),
-                          ...))
+                          Ellipsis))
         ba = inspect.signature(_foo).bind(a=200, b=11)
         self.assertEqual(_foo(*ba.args, **ba.kwargs), (200, 11, 20, 30))
 
@@ -2463,35 +2484,35 @@ class TestSignatureObject(unittest.TestCase):
         self.assertEqual(str(sig), '(a, b, /, c, d, **kwargs)')
 
         self.assertEqual(self.signature(partial(foo, 1)),
-                         ((('b', ..., ..., 'positional_only'),
-                           ('c', ..., ..., 'positional_or_keyword'),
-                           ('d', ..., ..., 'positional_or_keyword'),
-                           ('kwargs', ..., ..., 'var_keyword')),
-                         ...))
+                         ((('b', Ellipsis, Ellipsis, 'positional_only'),
+                           ('c', Ellipsis, Ellipsis, 'positional_or_keyword'),
+                           ('d', Ellipsis, Ellipsis, 'positional_or_keyword'),
+                           ('kwargs', Ellipsis, Ellipsis, 'var_keyword')),
+                         Ellipsis))
 
         self.assertEqual(self.signature(partial(foo, 1, 2)),
-                         ((('c', ..., ..., 'positional_or_keyword'),
-                           ('d', ..., ..., 'positional_or_keyword'),
-                           ('kwargs', ..., ..., 'var_keyword')),
-                         ...))
+                         ((('c', Ellipsis, Ellipsis, 'positional_or_keyword'),
+                           ('d', Ellipsis, Ellipsis, 'positional_or_keyword'),
+                           ('kwargs', Ellipsis, Ellipsis, 'var_keyword')),
+                         Ellipsis))
 
         self.assertEqual(self.signature(partial(foo, 1, 2, 3)),
-                         ((('d', ..., ..., 'positional_or_keyword'),
-                           ('kwargs', ..., ..., 'var_keyword')),
-                         ...))
+                         ((('d', Ellipsis, Ellipsis, 'positional_or_keyword'),
+                           ('kwargs', Ellipsis, Ellipsis, 'var_keyword')),
+                         Ellipsis))
 
         self.assertEqual(self.signature(partial(foo, 1, 2, c=3)),
-                         ((('c', 3, ..., 'keyword_only'),
-                           ('d', ..., ..., 'keyword_only'),
-                           ('kwargs', ..., ..., 'var_keyword')),
-                         ...))
+                         ((('c', 3, Ellipsis, 'keyword_only'),
+                           ('d', Ellipsis, Ellipsis, 'keyword_only'),
+                           ('kwargs', Ellipsis, Ellipsis, 'var_keyword')),
+                         Ellipsis))
 
         self.assertEqual(self.signature(partial(foo, 1, c=3)),
-                         ((('b', ..., ..., 'positional_only'),
-                           ('c', 3, ..., 'keyword_only'),
-                           ('d', ..., ..., 'keyword_only'),
-                           ('kwargs', ..., ..., 'var_keyword')),
-                         ...))
+                         ((('b', Ellipsis, Ellipsis, 'positional_only'),
+                           ('c', 3, Ellipsis, 'keyword_only'),
+                           ('d', Ellipsis, Ellipsis, 'keyword_only'),
+                           ('kwargs', Ellipsis, Ellipsis, 'var_keyword')),
+                         Ellipsis))
 
     @unittest.skipUnless(hasattr(functools, 'partialmethod'), 'requires partialmethod')
     def test_signature_on_partialmethod(self):
@@ -2511,14 +2532,14 @@ class TestSignatureObject(unittest.TestCase):
             ham = partialmethod(test, c=1)
 
         self.assertEqual(self.signature(Spam.ham),
-                         ((('it', ..., ..., 'positional_or_keyword'),
-                           ('a', ..., ..., 'positional_or_keyword'),
-                           ('c', 1, ..., 'keyword_only')),
+                         ((('it', Ellipsis, Ellipsis, 'positional_or_keyword'),
+                           ('a', Ellipsis, Ellipsis, 'positional_or_keyword'),
+                           ('c', 1, Ellipsis, 'keyword_only')),
                           'spam'))
 
         self.assertEqual(self.signature(Spam().ham),
-                         ((('a', ..., ..., 'positional_or_keyword'),
-                           ('c', 1, ..., 'keyword_only')),
+                         ((('a', Ellipsis, Ellipsis, 'positional_or_keyword'),
+                           ('c', 1, Ellipsis, 'keyword_only')),
                           'spam'))
 
     def test_signature_on_fake_partialmethod(self):
@@ -2541,20 +2562,20 @@ class TestSignatureObject(unittest.TestCase):
                 pass
 
         self.assertEqual(self.signature(Foo.bar),
-                         ((('self', ..., ..., "positional_or_keyword"),
-                           ('a', ..., ..., "positional_or_keyword"),
-                           ('b', ..., ..., "positional_or_keyword")),
-                          ...))
+                         ((('self', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('b', Ellipsis, Ellipsis, "positional_or_keyword")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(Foo().bar),
-                         ((('a', ..., ..., "positional_or_keyword"),
-                           ('b', ..., ..., "positional_or_keyword")),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('b', Ellipsis, Ellipsis, "positional_or_keyword")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(Foo.bar, follow_wrapped=False),
-                         ((('args', ..., ..., "var_positional"),
-                           ('kwargs', ..., ..., "var_keyword")),
-                          ...)) # functools.wraps will copy __annotations__
+                         ((('args', Ellipsis, Ellipsis, "var_positional"),
+                           ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                          Ellipsis)) # functools.wraps will copy __annotations__
                                 # from "func" to "wrapper", hence no
                                 # return_annotation
 
@@ -2574,13 +2595,13 @@ class TestSignatureObject(unittest.TestCase):
                 pass
 
         self.assertEqual(self.signature(Foo.__call__),
-                         ((('a', ..., ..., "positional_or_keyword"),
-                           ('b', ..., ..., "positional_or_keyword")),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('b', Ellipsis, Ellipsis, "positional_or_keyword")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(Foo().__call__),
-                         ((('b', ..., ..., "positional_or_keyword"),),
-                          ...))
+                         ((('b', Ellipsis, Ellipsis, "positional_or_keyword"),),
+                          Ellipsis))
 
         # Test we handle __signature__ partway down the wrapper stack
         def wrapped_foo_call():
@@ -2588,9 +2609,9 @@ class TestSignatureObject(unittest.TestCase):
         wrapped_foo_call.__wrapped__ = Foo.__call__
 
         self.assertEqual(self.signature(wrapped_foo_call),
-                         ((('a', ..., ..., "positional_or_keyword"),
-                           ('b', ..., ..., "positional_or_keyword")),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('b', Ellipsis, Ellipsis, "positional_or_keyword")),
+                          Ellipsis))
 
 
     def test_signature_on_class(self):
@@ -2599,80 +2620,80 @@ class TestSignatureObject(unittest.TestCase):
                 pass
 
         self.assertEqual(self.signature(C),
-                         ((('a', ..., ..., "positional_or_keyword"),),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),),
+                          Ellipsis))
 
         class CM(type):
             def __call__(cls, a):
                 pass
-        class C(metaclass=CM):
+        class C(six.with_metaclass(CM)):
             def __init__(self, b):
                 pass
 
         self.assertEqual(self.signature(C),
-                         ((('a', ..., ..., "positional_or_keyword"),),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),),
+                          Ellipsis))
 
         class CM(type):
             def __new__(mcls, name, bases, dct, *, foo=1):
                 return super().__new__(mcls, name, bases, dct)
-        class C(metaclass=CM):
+        class C(six.with_metaclass(CM)):
             def __init__(self, b):
                 pass
 
         self.assertEqual(self.signature(C),
-                         ((('b', ..., ..., "positional_or_keyword"),),
-                          ...))
+                         ((('b', Ellipsis, Ellipsis, "positional_or_keyword"),),
+                          Ellipsis))
 
         self.assertEqual(self.signature(CM),
-                         ((('name', ..., ..., "positional_or_keyword"),
-                           ('bases', ..., ..., "positional_or_keyword"),
-                           ('dct', ..., ..., "positional_or_keyword"),
-                           ('foo', 1, ..., "keyword_only")),
-                          ...))
+                         ((('name', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('bases', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('dct', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('foo', 1, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         class CMM(type):
             def __new__(mcls, name, bases, dct, *, foo=1):
                 return super().__new__(mcls, name, bases, dct)
             def __call__(cls, nm, bs, dt):
                 return type(nm, bs, dt)
-        class CM(type, metaclass=CMM):
+        class CM(six.with_metaclass(CMM, type)):
             def __new__(mcls, name, bases, dct, *, bar=2):
                 return super().__new__(mcls, name, bases, dct)
-        class C(metaclass=CM):
+        class C(six.with_metaclass(CM)):
             def __init__(self, b):
                 pass
 
         self.assertEqual(self.signature(CMM),
-                         ((('name', ..., ..., "positional_or_keyword"),
-                           ('bases', ..., ..., "positional_or_keyword"),
-                           ('dct', ..., ..., "positional_or_keyword"),
-                           ('foo', 1, ..., "keyword_only")),
-                          ...))
+                         ((('name', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('bases', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('dct', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('foo', 1, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(CM),
-                         ((('nm', ..., ..., "positional_or_keyword"),
-                           ('bs', ..., ..., "positional_or_keyword"),
-                           ('dt', ..., ..., "positional_or_keyword")),
-                          ...))
+                         ((('nm', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('bs', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('dt', Ellipsis, Ellipsis, "positional_or_keyword")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(C),
-                         ((('b', ..., ..., "positional_or_keyword"),),
-                          ...))
+                         ((('b', Ellipsis, Ellipsis, "positional_or_keyword"),),
+                          Ellipsis))
 
         class CM(type):
             def __init__(cls, name, bases, dct, *, bar=2):
                 return super().__init__(name, bases, dct)
-        class C(metaclass=CM):
+        class C(six.with_metaclass(CM)):
             def __init__(self, b):
                 pass
 
         self.assertEqual(self.signature(CM),
-                         ((('name', ..., ..., "positional_or_keyword"),
-                           ('bases', ..., ..., "positional_or_keyword"),
-                           ('dct', ..., ..., "positional_or_keyword"),
-                           ('bar', 2, ..., "keyword_only")),
-                          ...))
+                         ((('name', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('bases', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('dct', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('bar', 2, Ellipsis, "keyword_only")),
+                          Ellipsis))
 
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
                      "Signature information for builtins requires docstrings")
@@ -2716,7 +2737,7 @@ class TestSignatureObject(unittest.TestCase):
         class MetaP(type):
             def __call__(cls, foo, bar):
                 pass
-        class P4(P2, metaclass=MetaP):
+        class P4(six.with_metaclass(MetaP, P2)):
             pass
         self.assertEqual(str(inspect.signature(P4)), '(foo, bar)')
 
@@ -2726,8 +2747,8 @@ class TestSignatureObject(unittest.TestCase):
                 pass
 
         self.assertEqual(self.signature(Foo()),
-                         ((('a', ..., ..., "positional_or_keyword"),),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),),
+                          Ellipsis))
 
         class Spam:
             pass
@@ -2738,15 +2759,15 @@ class TestSignatureObject(unittest.TestCase):
             pass
 
         self.assertEqual(self.signature(Bar()),
-                         ((('a', ..., ..., "positional_or_keyword"),),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),),
+                          Ellipsis))
 
         class Wrapped:
             pass
         Wrapped.__wrapped__ = lambda a: None
         self.assertEqual(self.signature(Wrapped),
-                         ((('a', ..., ..., "positional_or_keyword"),),
-                          ...))
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),),
+                          Ellipsis))
         # wrapper loop:
         Wrapped.__wrapped__ = Wrapped
         with self.assertRaisesRegex(ValueError, 'wrapper loop'):
@@ -2754,8 +2775,8 @@ class TestSignatureObject(unittest.TestCase):
 
     def test_signature_on_lambdas(self):
         self.assertEqual(self.signature((lambda a=10: a)),
-                         ((('a', 10, ..., "positional_or_keyword"),),
-                          ...))
+                         ((('a', 10, Ellipsis, "positional_or_keyword"),),
+                          Ellipsis))
 
     def test_signature_equality(self):
         def foo(a, *, b:int) -> float: pass
@@ -2930,12 +2951,12 @@ class TestSignatureObject(unittest.TestCase):
         # in 3.3 keys in __annotations__ aren't mangled correctly
         has_mangled_annotations = '_Spam__p1' in Spam.foo.__annotations__
         self.assertEqual(self.signature(Spam.foo),
-                         ((('self', ..., ..., "positional_or_keyword"),
+                         ((('self', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('_Spam__p1', 2,
-                            1 if has_mangled_annotations else ..., "positional_or_keyword"),
+                            1 if has_mangled_annotations else Ellipsis, "positional_or_keyword"),
                            ('_Spam__p2', 3,
-                            2 if has_mangled_annotations else ..., "keyword_only")),
-                          ...))
+                            2 if has_mangled_annotations else Ellipsis, "keyword_only")),
+                          Ellipsis))
 
         self.assertEqual(self.signature(Spam.foo),
                          self.signature(Ham.foo))
