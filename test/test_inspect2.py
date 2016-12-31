@@ -2046,6 +2046,9 @@ class TestSignatureObject(unittest.TestCase):
 
         # normal method
         # (PyMethodDescr_Type, "method_descriptor")
+        if not hasattr(_pickle.Pickler.dump, '__text_signature__'):
+            # no point in testing the rest of these if we don't have signatures on builtins
+            return
         test_unbound_method(_pickle.Pickler.dump)
         d = _pickle.Pickler(io.StringIO())
         test_callable(d.dump)
@@ -2087,6 +2090,8 @@ class TestSignatureObject(unittest.TestCase):
                      "Signature information for builtins requires docstrings")
     def test_signature_on_decorated_builtins(self):
         import _testcapi
+        if not hasattr(_testcapi, 'docstring_with_signature_with_defaults'):
+            raise unittest.SkipTest('requires docstring_with_signature_with_defaults')
         func = _testcapi.docstring_with_signature_with_defaults
 
         def decorator(func):
@@ -2108,6 +2113,8 @@ class TestSignatureObject(unittest.TestCase):
     @cpython_only
     def test_signature_on_builtins_no_signature(self):
         import _testcapi
+        if not hasattr(_testcapi, 'docstring_no_signature'):
+            raise unittest.SkipTest('requires docstring_no_signature')
         with self.assertRaisesRegex(ValueError,
                                     'no signature found for builtin'):
             inspect.signature(_testcapi.docstring_no_signature)
@@ -2685,16 +2692,19 @@ class TestSignatureObject(unittest.TestCase):
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
                      "Signature information for builtins requires docstrings")
     def test_signature_on_builtin_class(self):
-        self.assertEqual(str(inspect.signature(_pickle.Pickler)),
-                         '(file, protocol=None, fix_imports=True)')
+        if hasattr(_pickle.Pickler, '__text_signature__'):
+            self.assertEqual(str(inspect.signature(_pickle.Pickler)),
+                             '(file, protocol=None, fix_imports=True)')
 
         class P(_pickle.Pickler): pass
         class EmptyTrait: pass
         class P2(EmptyTrait, P): pass
-        self.assertEqual(str(inspect.signature(P)),
-                         '(file, protocol=None, fix_imports=True)')
-        self.assertEqual(str(inspect.signature(P2)),
-                         '(file, protocol=None, fix_imports=True)')
+
+        if hasattr(_pickle.Pickler, '__text_signature__'):
+            self.assertEqual(str(inspect.signature(P)),
+                             '(file, protocol=None, fix_imports=True)')
+            self.assertEqual(str(inspect.signature(P2)),
+                             '(file, protocol=None, fix_imports=True)')
 
         class P3(P2):
             def __init__(self, spam):
@@ -2915,10 +2925,14 @@ class TestSignatureObject(unittest.TestCase):
         class Ham(Spam):
             pass
 
+        # in 3.3 keys in __annotations__ aren't mangled correctly
+        has_mangled_annotations = '_Spam__p1' in Spam.foo.__annotations__
         self.assertEqual(self.signature(Spam.foo),
                          ((('self', ..., ..., "positional_or_keyword"),
-                           ('_Spam__p1', 2, 1, "positional_or_keyword"),
-                           ('_Spam__p2', 3, 2, "keyword_only")),
+                           ('_Spam__p1', 2,
+                            1 if has_mangled_annotations else ..., "positional_or_keyword"),
+                           ('_Spam__p2', 3,
+                            2 if has_mangled_annotations else ..., "keyword_only")),
                           ...))
 
         self.assertEqual(self.signature(Spam.foo),
@@ -2930,6 +2944,8 @@ class TestSignatureObject(unittest.TestCase):
         foo_sig = MySignature.from_callable(foo)
         self.assertTrue(isinstance(foo_sig, MySignature))
 
+    @unittest.skipUnless(hasattr(_pickle.Pickler, '__text_signature__'),
+                         "must have signature information on builtins")
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
                      "Signature information for builtins requires docstrings")
     def test_signature_from_callable_builtin_obj(self):

@@ -2193,6 +2193,16 @@ def _signature_from_callable(obj, *,
     if not callable(obj):
         raise TypeError('{!r} is not a callable object'.format(obj))
 
+    if obj is object and not hasattr(object, '__text_signature__'):
+        # hardcode the empty signature of object() for use in old Python versions
+        # without __text_signature__
+        return _signature_from_callable(
+            lambda: None,
+            follow_wrapper_chains=follow_wrapper_chains,
+            skip_bound_arg=skip_bound_arg,
+            sigcls=sigcls
+        )
+
     if isinstance(obj, types.MethodType):
         # In this case we skip the first parameter of the underlying
         # function (usually `self` or `cls`).
@@ -2237,7 +2247,8 @@ def _signature_from_callable(obj, *,
     except AttributeError:
         pass
     else:
-        if isinstance(partialmethod, functools.partialmethod):
+        if (hasattr(functools, 'partialmethod') and
+                isinstance(partialmethod, functools.partialmethod)):
             # Unbound partialmethod (see functools.partialmethod)
             # This means, that we need to calculate the signature
             # as if it's a regular partial object, but taking into
@@ -2338,6 +2349,8 @@ def _signature_from_callable(obj, *,
                 if (obj.__init__ is object.__init__ and
                     obj.__new__ is object.__new__):
                     # Return a signature of 'object' builtin.
+                    # TODO report this as a bug to cpython; this should call _signature_from_callable
+                    # recursively, since now it will not correctly use a subclass of Signature
                     return signature(object)
                 else:
                     raise ValueError(
