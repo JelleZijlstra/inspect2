@@ -1129,7 +1129,7 @@ def getfullargspec(func):
         # But, it can also raise AttributeError, and, maybe something
         # else. So to be fully backwards compatible, we catch all
         # possible exceptions here, and reraise a TypeError.
-        raise TypeError('unsupported callable') from ex
+        raise TypeError('unsupported callable')
 
     args = []
     varargs = None
@@ -1728,7 +1728,7 @@ def _signature_get_partial(wrapped_sig, partial, extra_args=()):
         ba = wrapped_sig.bind_partial(*partial_args, **partial_keywords)
     except TypeError as ex:
         msg = 'partial object {!r} has incorrect arguments'.format(partial)
-        raise ValueError(msg) from ex
+        raise ValueError(msg)
 
 
     transform_to_kwonly = False
@@ -2371,7 +2371,7 @@ def _signature_from_callable(obj,
                     sigcls=sigcls)
             except ValueError as ex:
                 msg = 'no signature found for {!r}'.format(obj)
-                raise ValueError(msg) from ex
+                raise ValueError(msg)
 
     if sig is not None:
         # For classes and objects we skip the first parameter of their
@@ -2902,7 +2902,7 @@ class Signature:
                             msg = '{arg!r} parameter is positional only, ' \
                                   'but was passed as a keyword'
                             msg = msg.format(arg=param.name)
-                            raise TypeError(msg) from None
+                            raise TypeError(msg)
                         parameters_ex = (param,)
                         break
                     elif (param.kind == _VAR_KEYWORD or
@@ -2921,19 +2921,19 @@ class Signature:
                         else:
                             msg = 'missing a required argument: {arg!r}'
                             msg = msg.format(arg=param.name)
-                            raise TypeError(msg) from None
+                            raise TypeError(msg)
             else:
                 # We have a positional argument to process
                 try:
                     param = next(parameters)
                 except StopIteration:
-                    raise TypeError('too many positional arguments') from None
+                    raise TypeError('too many positional arguments')
                 else:
                     if param.kind in (_VAR_KEYWORD, _KEYWORD_ONLY):
                         # Looks like we have no parameter for this positional
                         # argument
                         raise TypeError(
-                            'too many positional arguments') from None
+                            'too many positional arguments')
 
                     if param.kind == _VAR_POSITIONAL:
                         # We have an '*args'-like argument, let's fill it with
@@ -2947,7 +2947,7 @@ class Signature:
                     if param.name in kwargs:
                         raise TypeError(
                             'multiple values for argument {arg!r}'.format(
-                                arg=param.name)) from None
+                                arg=param.name))
 
                     arguments[param.name] = arg_val
 
@@ -2977,7 +2977,7 @@ class Signature:
                 if (not partial and param.kind != _VAR_POSITIONAL and
                                                     param.default is _empty):
                     raise TypeError('missing a required argument: {arg!r}'. \
-                                    format(arg=param_name)) from None
+                                    format(arg=param_name))
 
             else:
                 if param.kind == _POSITIONAL_ONLY:
