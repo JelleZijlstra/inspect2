@@ -65,6 +65,13 @@ except SyntaxError:
 else:
     HAS_ANNOTATIONS = True
 
+try:
+    exec('def f(a, *, b): pass')
+except SyntaxError:
+    HAS_KEYWORD_ONLY = False
+else:
+    HAS_KEYWORD_ONLY = True
+
 def generator_function_example(self):
     for i in range(2):
         yield i
@@ -1896,6 +1903,10 @@ class MyParameter(inspect.Parameter):
     # used in test_signature_object_pickle
     pass
 
+def make_function(code):
+    ns = {}
+    exec(code, ns, ns)
+    return ns['test']
 
 
 class TestSignatureObject(unittest.TestCase):
@@ -1917,8 +1928,7 @@ class TestSignatureObject(unittest.TestCase):
 
         self.assertEqual(str(S()), '()')
 
-        def test(po, pk, pod=42, pkd=100, *args, ko, **kwargs):
-            pass
+        test = make_function('def test(po, pk, pod=42, pkd=100, *args, ko, **kwargs): pass')
         sig = inspect.signature(test)
         po = sig.parameters['po'].replace(kind=P.POSITIONAL_ONLY)
         pod = sig.parameters['pod'].replace(kind=P.POSITIONAL_ONLY)
@@ -1959,7 +1969,7 @@ class TestSignatureObject(unittest.TestCase):
         self.assertTrue('(po, pk' in repr(sig))
 
     def test_signature_object_pickle(self):
-        def foo(a, b, *, c:1={}, **kw) -> {42:'ham'}: pass
+        foo = make_function("def test(a, b, *, c:1={}, **kw) -> {42:'ham'}: pass")
         foo_partial = functools.partial(foo, a=1)
 
         sig = inspect.signature(foo_partial)
@@ -2003,24 +2013,24 @@ class TestSignatureObject(unittest.TestCase):
         self.assertEqual(self.signature(test), ((), Ellipsis))
 
     def test_signature_on_wargs(self):
-        def test(a, b:'foo') -> 123:
-            pass
+        test = make_function("def test(a, b:'foo') -> 123: pass")
         self.assertEqual(self.signature(test),
                          ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('b', Ellipsis, 'foo', "positional_or_keyword")),
                           123))
 
     def test_signature_on_wkwonly(self):
-        def test(*, a:float, b:str) -> int:
-            pass
+        test = make_function("def test(*, a:float, b:str) -> int: pass")
         self.assertEqual(self.signature(test),
                          ((('a', Ellipsis, float, "keyword_only"),
                            ('b', Ellipsis, str, "keyword_only")),
                            int))
 
     def test_signature_on_complex_args(self):
-        def test(a, b:'foo'=10, *args:'bar', spam:'baz', ham=123, **kwargs:int):
-            pass
+        test = make_function("""
+def test(a, b:'foo'=10, *args:'bar', spam:'baz', ham=123, **kwargs:int):
+    pass
+""")
         self.assertEqual(self.signature(test),
                          ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('b', 10, 'foo', "positional_or_keyword"),
@@ -2119,7 +2129,7 @@ class TestSignatureObject(unittest.TestCase):
 
         def decorator(func):
             @functools.wraps(func)
-            def wrapper(*args, **kwargs) -> int:
+            def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
             return wrapper
 
@@ -2128,7 +2138,7 @@ class TestSignatureObject(unittest.TestCase):
         self.assertEqual(inspect.signature(func),
                          inspect.signature(decorated_func))
 
-        def wrapper_like(*args, **kwargs) -> int: pass
+        def wrapper_like(*args, **kwargs): pass
         self.assertEqual(inspect.signature(decorated_func,
                                            follow_wrapped=False),
                          inspect.signature(wrapper_like))
@@ -2151,9 +2161,22 @@ class TestSignatureObject(unittest.TestCase):
             inspect.signature(42)
 
     def test_signature_from_functionlike_object(self):
-        def func(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
+        funcs = []
+        def func(a, b, *args, **kwargs):
             pass
+        funcs.append(func)
 
+        try:
+            funcs.append(make_function("""
+def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
+    pass
+"""))
+        except SyntaxError:
+            pass
+        for func in funcs:
+            self.check_signature_from_functionlike_object(func)
+
+    def check_signature_from_functionlike_object(self, func):
         class funclike:
             # Has to be callable, and have correct
             # __code__, __annotations__, __defaults__, __name__,
@@ -2207,7 +2230,7 @@ class TestSignatureObject(unittest.TestCase):
         # We only want to duck type function-like objects,
         # not classes.
 
-        def func(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
+        def func(a, b, *args, **kwargs):
             pass
 
         class funclike:
@@ -2226,17 +2249,17 @@ class TestSignatureObject(unittest.TestCase):
         class Test:
             def __init__(*args):
                 pass
-            def m1(self, arg1, arg2=1) -> int:
+            def m1(self, arg1, arg2=1):
                 pass
             def m2(*args):
                 pass
-            def __call__(*, a):
+            def __call__():
                 pass
 
         self.assertEqual(self.signature(Test().m1),
                          ((('arg1', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('arg2', 1, Ellipsis, "positional_or_keyword")),
-                          int))
+                          Ellipsis))
 
         self.assertEqual(self.signature(Test().m2),
                          ((('args', Ellipsis, Ellipsis, "var_positional"),),
@@ -2252,7 +2275,7 @@ class TestSignatureObject(unittest.TestCase):
     def test_signature_wrapped_bound_method(self):
         # Issue 24298
         class Test:
-            def m1(self, arg1, arg2=1) -> int:
+            def m1(self, arg1, arg2=1):
                 pass
         @functools.wraps(Test().m1)
         def m1d(*args, **kwargs):
@@ -2260,42 +2283,42 @@ class TestSignatureObject(unittest.TestCase):
         self.assertEqual(self.signature(m1d),
                          ((('arg1', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('arg2', 1, Ellipsis, "positional_or_keyword")),
-                          int))
+                          Ellipsis))
 
     def test_signature_on_classmethod(self):
         class Test:
             @classmethod
-            def foo(cls, arg1, *, arg2=1):
+            def foo(cls, arg1, arg2=1):
                 pass
 
         meth = Test().foo
         self.assertEqual(self.signature(meth),
                          ((('arg1', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('arg2', 1, Ellipsis, "keyword_only")),
+                           ('arg2', 1, Ellipsis, "positional_or_keyword")),
                           Ellipsis))
 
         meth = Test.foo
         self.assertEqual(self.signature(meth),
                          ((('arg1', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('arg2', 1, Ellipsis, "keyword_only")),
+                           ('arg2', 1, Ellipsis, "positional_or_keyword")),
                           Ellipsis))
 
     def test_signature_on_staticmethod(self):
         class Test:
             @staticmethod
-            def foo(cls, *, arg):
+            def foo(cls, arg):
                 pass
 
         meth = Test().foo
         self.assertEqual(self.signature(meth),
                          ((('cls', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('arg', Ellipsis, Ellipsis, "keyword_only")),
+                           ('arg', Ellipsis, Ellipsis, "positional_or_keyword")),
                           Ellipsis))
 
         meth = Test.foo
         self.assertEqual(self.signature(meth),
                          ((('cls', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('arg', Ellipsis, Ellipsis, "keyword_only")),
+                           ('arg', Ellipsis, Ellipsis, "positional_or_keyword")),
                           Ellipsis))
 
     def test_signature_on_partial(self):
@@ -2314,20 +2337,20 @@ class TestSignatureObject(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "has incorrect arguments"):
             inspect.signature(partial(test, a=1))
 
-        def test(a, b, *, c, d):
+        def test(a, b, c, d):
             pass
 
         self.assertEqual(self.signature(partial(test)),
                          ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('b', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('c', Ellipsis, Ellipsis, "keyword_only"),
-                           ('d', Ellipsis, Ellipsis, "keyword_only")),
+                           ('c', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('d', Ellipsis, Ellipsis, "positional_or_keyword")),
                           Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 1)),
                          ((('b', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('c', Ellipsis, Ellipsis, "keyword_only"),
-                           ('d', Ellipsis, Ellipsis, "keyword_only")),
+                           ('c', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('d', Ellipsis, Ellipsis, "positional_or_keyword")),
                           Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 1, c=2)),
@@ -2356,68 +2379,112 @@ class TestSignatureObject(unittest.TestCase):
                            ('d', Ellipsis, Ellipsis, "keyword_only")),
                           Ellipsis))
 
-        def test(a, *args, b, **kwargs):
+        def test(a, *args, **kwargs):
             pass
 
         self.assertEqual(self.signature(partial(test, 1)),
                          ((('args', Ellipsis, Ellipsis, "var_positional"),
-                           ('b', Ellipsis, Ellipsis, "keyword_only"),
                            ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
                           Ellipsis))
 
         self.assertEqual(self.signature(partial(test, a=1)),
                          ((('a', 1, Ellipsis, "keyword_only"),
-                           ('b', Ellipsis, Ellipsis, "keyword_only"),
                            ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
                           Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 1, 2, 3)),
                          ((('args', Ellipsis, Ellipsis, "var_positional"),
-                           ('b', Ellipsis, Ellipsis, "keyword_only"),
                            ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
                           Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 1, 2, 3, test=True)),
                          ((('args', Ellipsis, Ellipsis, "var_positional"),
-                           ('b', Ellipsis, Ellipsis, "keyword_only"),
                            ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
                           Ellipsis))
 
         self.assertEqual(self.signature(partial(test, 1, 2, 3, test=1, b=0)),
                          ((('args', Ellipsis, Ellipsis, "var_positional"),
-                           ('b', 0, Ellipsis, "keyword_only"),
                            ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
                           Ellipsis))
 
         self.assertEqual(self.signature(partial(test, b=0)),
                          ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('args', Ellipsis, Ellipsis, "var_positional"),
-                           ('b', 0, Ellipsis, "keyword_only"),
                            ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
                           Ellipsis))
 
         self.assertEqual(self.signature(partial(test, b=0, test=1)),
                          ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('args', Ellipsis, Ellipsis, "var_positional"),
-                           ('b', 0, Ellipsis, "keyword_only"),
                            ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
                           Ellipsis))
 
-        def test(a, b, c:int) -> 42:
+        try:
+            test = make_function('def test(a, *args, b, **kwargs): pass')
+        except SyntaxError:
             pass
+        else:
+            self.assertEqual(self.signature(partial(test, 1)),
+                             ((('args', Ellipsis, Ellipsis, "var_positional"),
+                               ('b', Ellipsis, Ellipsis, "keyword_only"),
+                               ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                              Ellipsis))
 
-        sig = test.__signature__ = inspect.signature(test)
+            self.assertEqual(self.signature(partial(test, a=1)),
+                             ((('a', 1, Ellipsis, "keyword_only"),
+                               ('b', Ellipsis, Ellipsis, "keyword_only"),
+                               ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                              Ellipsis))
 
-        self.assertEqual(self.signature(partial(partial(test, 1))),
-                         ((('b', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('c', Ellipsis, int, "positional_or_keyword")),
-                          42))
+            self.assertEqual(self.signature(partial(test, 1, 2, 3)),
+                             ((('args', Ellipsis, Ellipsis, "var_positional"),
+                               ('b', Ellipsis, Ellipsis, "keyword_only"),
+                               ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                              Ellipsis))
 
-        self.assertEqual(self.signature(partial(partial(test, 1), 2)),
-                         ((('c', Ellipsis, int, "positional_or_keyword"),),
-                          42))
+            self.assertEqual(self.signature(partial(test, 1, 2, 3, test=True)),
+                             ((('args', Ellipsis, Ellipsis, "var_positional"),
+                               ('b', Ellipsis, Ellipsis, "keyword_only"),
+                               ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                              Ellipsis))
 
-        psig = inspect.signature(partial(partial(test, 1), 2))
+            self.assertEqual(self.signature(partial(test, 1, 2, 3, test=1, b=0)),
+                             ((('args', Ellipsis, Ellipsis, "var_positional"),
+                               ('b', 0, Ellipsis, "keyword_only"),
+                               ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                              Ellipsis))
+
+            self.assertEqual(self.signature(partial(test, b=0)),
+                             ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                               ('args', Ellipsis, Ellipsis, "var_positional"),
+                               ('b', 0, Ellipsis, "keyword_only"),
+                               ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                              Ellipsis))
+
+            self.assertEqual(self.signature(partial(test, b=0, test=1)),
+                             ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                               ('args', Ellipsis, Ellipsis, "var_positional"),
+                               ('b', 0, Ellipsis, "keyword_only"),
+                               ('kwargs', Ellipsis, Ellipsis, "var_keyword")),
+                              Ellipsis))
+
+        try:
+            test = make_function('def test(a, b, c:int) -> 42: pass')
+        except SyntaxError:
+            pass
+        else:
+            sig = test.__signature__ = inspect.signature(test)
+
+            self.assertEqual(self.signature(partial(partial(test, 1))),
+                             ((('b', Ellipsis, Ellipsis, "positional_or_keyword"),
+                               ('c', Ellipsis, int, "positional_or_keyword")),
+                              42))
+
+            self.assertEqual(self.signature(partial(partial(test, 1), 2)),
+                             ((('c', Ellipsis, int, "positional_or_keyword"),),
+                              42))
+
+            psig = inspect.signature(partial(partial(test, 1), 2))
 
         def foo(a):
             return a
@@ -2439,18 +2506,21 @@ class TestSignatureObject(unittest.TestCase):
                           Ellipsis))
         self.assertEqual(_foo(c=10), (1, 30, 10))
 
-        def foo(a, b, c, *, d):
-            return a, b, c, d
-        _foo = partial(partial(foo, d=20, c=20), b=10, d=30)
-        self.assertEqual(self.signature(_foo),
-                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('b', 10, Ellipsis, "keyword_only"),
-                           ('c', 20, Ellipsis, "keyword_only"),
-                           ('d', 30, Ellipsis, "keyword_only"),
-                           ),
-                          Ellipsis))
-        ba = inspect.signature(_foo).bind(a=200, b=11)
-        self.assertEqual(_foo(*ba.args, **ba.kwargs), (200, 11, 20, 30))
+        try:
+            foo = make_function('def test(a, b, c, *, d): return a, b, c, d')
+        except SyntaxError:
+            pass
+        else:
+            _foo = partial(partial(foo, d=20, c=20), b=10, d=30)
+            self.assertEqual(self.signature(_foo),
+                             ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                               ('b', 10, Ellipsis, "keyword_only"),
+                               ('c', 20, Ellipsis, "keyword_only"),
+                               ('d', 30, Ellipsis, "keyword_only"),
+                               ),
+                              Ellipsis))
+            ba = inspect.signature(_foo).bind(a=200, b=11)
+            self.assertEqual(_foo(*ba.args, **ba.kwargs), (200, 11, 20, 30))
 
         def foo(a=1, b=2, c=3):
             return a, b, c
@@ -2527,7 +2597,7 @@ class TestSignatureObject(unittest.TestCase):
             inspect.signature(Spam.ham)
 
         class Spam:
-            def test(it, a, *, c) -> 'spam':
+            def test(it, a, c):
                 pass
             ham = partialmethod(test, c=1)
 
@@ -2535,12 +2605,12 @@ class TestSignatureObject(unittest.TestCase):
                          ((('it', Ellipsis, Ellipsis, 'positional_or_keyword'),
                            ('a', Ellipsis, Ellipsis, 'positional_or_keyword'),
                            ('c', 1, Ellipsis, 'keyword_only')),
-                          'spam'))
+                          Ellipsis))
 
         self.assertEqual(self.signature(Spam().ham),
                          ((('a', Ellipsis, Ellipsis, 'positional_or_keyword'),
                            ('c', 1, Ellipsis, 'keyword_only')),
-                          'spam'))
+                          Ellipsis))
 
     def test_signature_on_fake_partialmethod(self):
         def foo(a): pass
@@ -2552,7 +2622,7 @@ class TestSignatureObject(unittest.TestCase):
 
         def decorator(func):
             @functools.wraps(func)
-            def wrapper(*args, **kwargs) -> int:
+            def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
             return wrapper
 
@@ -2582,7 +2652,7 @@ class TestSignatureObject(unittest.TestCase):
         # Test that we handle method wrappers correctly
         def decorator(func):
             @functools.wraps(func)
-            def wrapper(*args, **kwargs) -> int:
+            def wrapper(*args, **kwargs):
                 return func(42, *args, **kwargs)
             sig = inspect.signature(func)
             new_params = tuple(sig.parameters.values())[1:]
@@ -2635,7 +2705,7 @@ class TestSignatureObject(unittest.TestCase):
                           Ellipsis))
 
         class CM(type):
-            def __new__(mcls, name, bases, dct, *, foo=1):
+            def __new__(mcls, name, bases, dct, foo=1):
                 return super().__new__(mcls, name, bases, dct)
         class C(six.with_metaclass(CM)):
             def __init__(self, b):
@@ -2649,16 +2719,16 @@ class TestSignatureObject(unittest.TestCase):
                          ((('name', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('bases', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('dct', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('foo', 1, Ellipsis, "keyword_only")),
+                           ('foo', 1, Ellipsis, "positional_or_keyword")),
                           Ellipsis))
 
         class CMM(type):
-            def __new__(mcls, name, bases, dct, *, foo=1):
+            def __new__(mcls, name, bases, dct, foo=1):
                 return super().__new__(mcls, name, bases, dct)
             def __call__(cls, nm, bs, dt):
                 return type(nm, bs, dt)
         class CM(six.with_metaclass(CMM, type)):
-            def __new__(mcls, name, bases, dct, *, bar=2):
+            def __new__(mcls, name, bases, dct, bar=2):
                 return super().__new__(mcls, name, bases, dct)
         class C(six.with_metaclass(CM)):
             def __init__(self, b):
@@ -2668,7 +2738,7 @@ class TestSignatureObject(unittest.TestCase):
                          ((('name', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('bases', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('dct', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('foo', 1, Ellipsis, "keyword_only")),
+                           ('foo', 1, Ellipsis, "positional_or_keyword")),
                           Ellipsis))
 
         self.assertEqual(self.signature(CM),
@@ -2682,7 +2752,7 @@ class TestSignatureObject(unittest.TestCase):
                           Ellipsis))
 
         class CM(type):
-            def __init__(cls, name, bases, dct, *, bar=2):
+            def __init__(cls, name, bases, dct, bar=2):
                 return super().__init__(name, bases, dct)
         class C(six.with_metaclass(CM)):
             def __init__(self, b):
@@ -2692,7 +2762,7 @@ class TestSignatureObject(unittest.TestCase):
                          ((('name', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('bases', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('dct', Ellipsis, Ellipsis, "positional_or_keyword"),
-                           ('bar', 2, Ellipsis, "keyword_only")),
+                           ('bar', 2, Ellipsis, "positional_or_keyword")),
                           Ellipsis))
 
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
@@ -2779,83 +2849,115 @@ class TestSignatureObject(unittest.TestCase):
                           Ellipsis))
 
     def test_signature_equality(self):
-        def foo(a, *, b:int) -> float: pass
+        def foo(a, b): pass
         self.assertFalse(inspect.signature(foo) == 42)
         self.assertTrue(inspect.signature(foo) != 42)
         self.assertTrue(inspect.signature(foo) == EqualsToAll())
         self.assertFalse(inspect.signature(foo) != EqualsToAll())
 
-        def bar(a, *, b:int) -> float: pass
+        def bar(a, b): pass
         self.assertTrue(inspect.signature(foo) == inspect.signature(bar))
         self.assertFalse(inspect.signature(foo) != inspect.signature(bar))
         self.assertEqual(
             hash(inspect.signature(foo)), hash(inspect.signature(bar)))
 
-        def bar(a, *, b:int) -> int: pass
+        def bar(a, c): pass
         self.assertFalse(inspect.signature(foo) == inspect.signature(bar))
         self.assertTrue(inspect.signature(foo) != inspect.signature(bar))
         self.assertNotEqual(
             hash(inspect.signature(foo)), hash(inspect.signature(bar)))
 
-        def bar(a, *, b:int): pass
+        def bar(a, *b): pass
         self.assertFalse(inspect.signature(foo) == inspect.signature(bar))
         self.assertTrue(inspect.signature(foo) != inspect.signature(bar))
         self.assertNotEqual(
             hash(inspect.signature(foo)), hash(inspect.signature(bar)))
 
-        def bar(a, *, b:int=42) -> float: pass
+        def bar(a, b, c): pass
         self.assertFalse(inspect.signature(foo) == inspect.signature(bar))
         self.assertTrue(inspect.signature(foo) != inspect.signature(bar))
         self.assertNotEqual(
             hash(inspect.signature(foo)), hash(inspect.signature(bar)))
 
-        def bar(a, *, c) -> float: pass
+    @unittest.skipUnless(HAS_ANNOTATIONS, 'test requires annotations')
+    def test_signature_equality_with_annotations(self):
+        foo = make_function('def test(a, *, b:int) -> float: pass')
+        self.assertFalse(inspect.signature(foo) == 42)
+        self.assertTrue(inspect.signature(foo) != 42)
+        self.assertTrue(inspect.signature(foo) == EqualsToAll())
+        self.assertFalse(inspect.signature(foo) != EqualsToAll())
+
+        bar = make_function('def test(a, *, b:int) -> float: pass')
+        self.assertTrue(inspect.signature(foo) == inspect.signature(bar))
+        self.assertFalse(inspect.signature(foo) != inspect.signature(bar))
+        self.assertEqual(
+            hash(inspect.signature(foo)), hash(inspect.signature(bar)))
+
+        bar = make_function('def test(a, *, b:int) -> int: pass')
         self.assertFalse(inspect.signature(foo) == inspect.signature(bar))
         self.assertTrue(inspect.signature(foo) != inspect.signature(bar))
         self.assertNotEqual(
             hash(inspect.signature(foo)), hash(inspect.signature(bar)))
 
-        def bar(a, b:int) -> float: pass
+        bar = make_function('def test(a, *, b:int): pass')
         self.assertFalse(inspect.signature(foo) == inspect.signature(bar))
         self.assertTrue(inspect.signature(foo) != inspect.signature(bar))
         self.assertNotEqual(
             hash(inspect.signature(foo)), hash(inspect.signature(bar)))
-        def spam(b:int, a) -> float: pass
+
+        bar = make_function('def test(a, *, b:int=42) -> float: pass')
+        self.assertFalse(inspect.signature(foo) == inspect.signature(bar))
+        self.assertTrue(inspect.signature(foo) != inspect.signature(bar))
+        self.assertNotEqual(
+            hash(inspect.signature(foo)), hash(inspect.signature(bar)))
+
+        bar = make_function('def test(a, *, c) -> float: pass')
+        self.assertFalse(inspect.signature(foo) == inspect.signature(bar))
+        self.assertTrue(inspect.signature(foo) != inspect.signature(bar))
+        self.assertNotEqual(
+            hash(inspect.signature(foo)), hash(inspect.signature(bar)))
+
+        bar = make_function('def test(a, b:int) -> float: pass')
+        self.assertFalse(inspect.signature(foo) == inspect.signature(bar))
+        self.assertTrue(inspect.signature(foo) != inspect.signature(bar))
+        self.assertNotEqual(
+            hash(inspect.signature(foo)), hash(inspect.signature(bar)))
+        spam = make_function('def test(b:int, a) -> float: pass')
         self.assertFalse(inspect.signature(spam) == inspect.signature(bar))
         self.assertTrue(inspect.signature(spam) != inspect.signature(bar))
         self.assertNotEqual(
             hash(inspect.signature(spam)), hash(inspect.signature(bar)))
 
-        def foo(*, a, b, c): pass
-        def bar(*, c, b, a): pass
+        foo = make_function('def test(*, a, b, c): pass')
+        bar = make_function('def test(*, c, b, a): pass')
         self.assertTrue(inspect.signature(foo) == inspect.signature(bar))
         self.assertFalse(inspect.signature(foo) != inspect.signature(bar))
         self.assertEqual(
             hash(inspect.signature(foo)), hash(inspect.signature(bar)))
 
-        def foo(*, a=1, b, c): pass
-        def bar(*, c, b, a=1): pass
+        foo = make_function('def test(*, a=1, b, c): pass')
+        bar = make_function('def test(*, c, b, a=1): pass')
         self.assertTrue(inspect.signature(foo) == inspect.signature(bar))
         self.assertFalse(inspect.signature(foo) != inspect.signature(bar))
         self.assertEqual(
             hash(inspect.signature(foo)), hash(inspect.signature(bar)))
 
-        def foo(pos, *, a=1, b, c): pass
-        def bar(pos, *, c, b, a=1): pass
+        foo = make_function('def test(pos, *, a=1, b, c): pass')
+        bar = make_function('def test(pos, *, c, b, a=1): pass')
         self.assertTrue(inspect.signature(foo) == inspect.signature(bar))
         self.assertFalse(inspect.signature(foo) != inspect.signature(bar))
         self.assertEqual(
             hash(inspect.signature(foo)), hash(inspect.signature(bar)))
 
-        def foo(pos, *, a, b, c): pass
-        def bar(pos, *, c, b, a=1): pass
+        foo = make_function('def test(pos, *, a, b, c): pass')
+        bar = make_function('def test(pos, *, c, b, a=1): pass')
         self.assertFalse(inspect.signature(foo) == inspect.signature(bar))
         self.assertTrue(inspect.signature(foo) != inspect.signature(bar))
         self.assertNotEqual(
             hash(inspect.signature(foo)), hash(inspect.signature(bar)))
 
-        def foo(pos, *args, a=42, b, c, **kwargs:int): pass
-        def bar(pos, *args, c, b, a=42, **kwargs:int): pass
+        foo = make_function('def test(pos, *args, a=42, b, c, **kwargs:int): pass')
+        bar = make_function('def test(pos, *args, c, b, a=42, **kwargs:int): pass')
         self.assertTrue(inspect.signature(foo) == inspect.signature(bar))
         self.assertFalse(inspect.signature(foo) != inspect.signature(bar))
         self.assertEqual(
@@ -2874,37 +2976,49 @@ class TestSignatureObject(unittest.TestCase):
         self.assertNotEqual(hash(foo_sig),
                             hash(manual_sig.replace(return_annotation='spam')))
 
-        def bar(a) -> 1: pass
+        def bar(b): pass
         self.assertNotEqual(hash(foo_sig), hash(inspect.signature(bar)))
 
         def foo(a={}): pass
         with self.assertRaisesRegex(TypeError, 'unhashable type'):
             hash(inspect.signature(foo))
 
-        def foo(a) -> {}: pass
-        with self.assertRaisesRegex(TypeError, 'unhashable type'):
-            hash(inspect.signature(foo))
+        if HAS_ANNOTATIONS:
+            foo = make_function('def test(a) -> {}: pass')
+            with self.assertRaisesRegex(TypeError, 'unhashable type'):
+                hash(inspect.signature(foo))
 
     def test_signature_str(self):
-        def foo(a:int=1, *, b, c=None, **kwargs) -> 42:
-            pass
-        self.assertEqual(str(inspect.signature(foo)),
-                         '(a:int=1, *, b, c=None, **kwargs) -> 42')
-
-        def foo(a:int=1, *args, b, c=None, **kwargs) -> 42:
-            pass
-        self.assertEqual(str(inspect.signature(foo)),
-                         '(a:int=1, *args, b, c=None, **kwargs) -> 42')
-
         def foo():
             pass
         self.assertEqual(str(inspect.signature(foo)), '()')
+
+        def foo(a, b):
+            pass
+        self.assertEqual(str(inspect.signature(foo)), '(a, b)')
+
+        def foo(a, b, c=3):
+            pass
+        self.assertEqual(str(inspect.signature(foo)), '(a, b, c=3)')
+
+        def foo(a, b, *args, **kwargs):
+            pass
+        self.assertEqual(str(inspect.signature(foo)), '(a, b, *args, **kwargs)')
+
+        if HAS_ANNOTATIONS:
+            foo = make_function('def test(a:int=1, *, b, c=None, **kwargs) -> 42: pass')
+            self.assertEqual(str(inspect.signature(foo)),
+                             '(a:int=1, *, b, c=None, **kwargs) -> 42')
+
+            foo = make_function('def test(a:int=1, *args, b, c=None, **kwargs) -> 42: pass')
+            self.assertEqual(str(inspect.signature(foo)),
+                             '(a:int=1, *args, b, c=None, **kwargs) -> 42')
 
     def test_signature_str_positional_only(self):
         P = inspect.Parameter
         S = inspect.Signature
 
-        def test(a_po, *, b, **kwargs):
+        def test(a_po, b, **kwargs):
             return a_po, kwargs
 
         sig = inspect.signature(test)
@@ -2913,7 +3027,7 @@ class TestSignatureObject(unittest.TestCase):
         test.__signature__ = sig.replace(parameters=new_params)
 
         self.assertEqual(str(inspect.signature(test)),
-                         '(a_po, /, *, b, **kwargs)')
+                         '(a_po, /, b, **kwargs)')
 
         self.assertEqual(str(S(parameters=[P('foo', P.POSITIONAL_ONLY)])),
                          '(foo, /)')
@@ -2929,33 +3043,48 @@ class TestSignatureObject(unittest.TestCase):
                          '(foo, /, *bar)')
 
     def test_signature_replace_anno(self):
-        def test() -> 42:
+        def test():
             pass
 
         sig = inspect.signature(test)
+        self.assertIs(sig.return_annotation, sig.empty)
+        sig = sig.replace(return_annotation=42)
+        self.assertEqual(sig.return_annotation, 42)
         sig = sig.replace(return_annotation=None)
         self.assertIs(sig.return_annotation, None)
         sig = sig.replace(return_annotation=sig.empty)
         self.assertIs(sig.return_annotation, sig.empty)
         sig = sig.replace(return_annotation=42)
         self.assertEqual(sig.return_annotation, 42)
+        sig = sig.replace(return_annotation=sig.empty)
         self.assertEqual(sig, inspect.signature(test))
 
     def test_signature_on_mangled_parameters(self):
-        class Spam:
-            def foo(self, __p1:1=2, *, __p2:2=3):
-                pass
+        ns = {}
+        try:
+            exec("""
+class Spam:
+    def foo(self, __p1:1=2, *, __p2:2=3):
+        pass
+""", ns, ns)
+        except SyntaxError:
+            class Spam:
+                def foo(self, __p1=2, __p2=3):
+                    pass
+        else:
+            Spam = ns['Spam']
         class Ham(Spam):
             pass
 
         # in 3.3 keys in __annotations__ aren't mangled correctly
-        has_mangled_annotations = '_Spam__p1' in Spam.foo.__annotations__
+        has_mangled_annotations = HAS_ANNOTATIONS and '_Spam__p1' in Spam.foo.__annotations__
         self.assertEqual(self.signature(Spam.foo),
                          ((('self', Ellipsis, Ellipsis, "positional_or_keyword"),
                            ('_Spam__p1', 2,
                             1 if has_mangled_annotations else Ellipsis, "positional_or_keyword"),
                            ('_Spam__p2', 3,
-                            2 if has_mangled_annotations else Ellipsis, "keyword_only")),
+                            2 if has_mangled_annotations else Ellipsis,
+                            "keyword_only" if HAS_KEYWORD_ONLY else "positional_or_keyword")),
                           Ellipsis))
 
         self.assertEqual(self.signature(Spam.foo),
@@ -2963,7 +3092,7 @@ class TestSignatureObject(unittest.TestCase):
 
     def test_signature_from_callable_python_obj(self):
         class MySignature(inspect.Signature): pass
-        def foo(a, *, b:1): pass
+        def foo(a, b): pass
         foo_sig = MySignature.from_callable(foo)
         self.assertTrue(isinstance(foo_sig, MySignature))
 
@@ -3225,22 +3354,20 @@ class TestSignatureBind(unittest.TestCase):
         self.assertEqual(self.call(test, c=5, a=4, b=3),
                          (4, 3, 5, {}))
 
+    @unittest.skipUnless(HAS_KEYWORD_ONLY, 'requires keyword-only arguments')
     def test_signature_bind_kwonly(self):
-        def test(*, foo):
-            return foo
+        test = make_function('def test(*, foo): return foo')
         with self.assertRaisesRegex(TypeError,
                                      'too many positional arguments'):
             self.call(test, 1)
         self.assertEqual(self.call(test, foo=1), 1)
 
-        def test(a, *, foo=1, bar):
-            return foo
+        test = make_function('def test(a, *, foo=1, bar): return foo')
         with self.assertRaisesRegex(TypeError,
                                      "missing a required argument: 'bar'"):
             self.call(test, 1)
 
-        def test(foo, *, bar):
-            return foo, bar
+        test = make_function('def test(foo, *, bar): return foo, bar')
         self.assertEqual(self.call(test, 1, bar=2), (1, 2))
         self.assertEqual(self.call(test, bar=2, foo=1), (1, 2))
 
@@ -3266,8 +3393,7 @@ class TestSignatureBind(unittest.TestCase):
                                      "missing a required argument: 'bar'"):
             self.call(test, 1)
 
-        def test(foo, *, bar, **bin):
-            return foo, bar, bin
+        test = make_function('def test(foo, *, bar, **bin): return foo, bar, bin')
         self.assertEqual(self.call(test, 1, bar=2), (1, 2, {}))
         self.assertEqual(self.call(test, foo=1, bar=2), (1, 2, {}))
         self.assertEqual(self.call(test, 1, bar=2, spam='ham'),
@@ -3281,8 +3407,23 @@ class TestSignatureBind(unittest.TestCase):
                          (1, 2, {'bin': 1, 'spam': 10}))
 
     def test_signature_bind_arguments(self):
-        def test(a, *args, b, z=100, **kwargs):
+        def test(a, b, z=100, **kwargs):
             pass
+        sig = inspect.signature(test)
+        ba = sig.bind(10, b=30, c=40, args=50, kwargs=60)
+        # we won't have 'z' argument in the bound arguments object, as we didn't
+        # pass it to the 'bind'
+        self.assertEqual(tuple(ba.arguments.items()),
+                         (('a', 10), ('b', 30),
+                          ('kwargs', {'c': 40, 'args': 50, 'kwargs': 60})))
+        self.assertEqual(ba.kwargs,
+                         {'c': 40, 'args': 50, 'kwargs': 60})
+        self.assertEqual(ba.args, (10, 30))
+
+        try:
+            test = make_function('def test(a, *args, b, z=100, **kwargs): pass')
+        except SyntaxError:
+            return
         sig = inspect.signature(test)
         ba = sig.bind(10, 20, b=30, c=40, args=50, kwargs=60)
         # we won't have 'z' argument in the bound arguments object, as we didn't
@@ -3297,7 +3438,7 @@ class TestSignatureBind(unittest.TestCase):
     def test_signature_bind_positional_only(self):
         P = inspect.Parameter
 
-        def test(a_po, b_po, c_po=3, foo=42, *, bar=50, **kwargs):
+        def test(a_po, b_po, c_po=3, foo=42, bar=50, **kwargs):
             return a_po, b_po, c_po, foo, bar, kwargs
 
         sig = inspect.signature(test)
