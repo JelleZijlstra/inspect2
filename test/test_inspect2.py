@@ -3538,15 +3538,34 @@ class TestBoundArguments(unittest.TestCase):
         self.assertFalse(ba == ba4)
         self.assertTrue(ba != ba4)
 
-        def foo(*, a, b): pass
+        def foo(a, b): pass
         sig = inspect.signature(foo)
         ba1 = sig.bind(a=1, b=2)
         ba2 = sig.bind(b=2, a=1)
         self.assertTrue(ba1 == ba2)
         self.assertFalse(ba1 != ba2)
 
+        try:
+            foo = make_function('def test(a, b): pass')
+        except SyntaxError:
+            pass
+        else:
+            sig = inspect.signature(foo)
+            ba1 = sig.bind(a=1, b=2)
+            ba2 = sig.bind(b=2, a=1)
+            self.assertTrue(ba1 == ba2)
+            self.assertFalse(ba1 != ba2)
+
     def test_signature_bound_arguments_pickle(self):
-        def foo(a, b, *, c:1={}, **kw) -> {42:'ham'}: pass
+        def foo(a, b, c={}, **kw): pass
+
+        funcs = [foo]
+        try:
+            complex_fn = make_function("def test(a, b, *, c:1={}, **kw) -> {42:'ham'}: pass")
+        except SyntaxError:
+            pass
+        else:
+            funcs.append(complex_fn)
         sig = inspect.signature(foo)
         ba = sig.bind(20, 30, z={})
 
@@ -3556,28 +3575,47 @@ class TestBoundArguments(unittest.TestCase):
                 self.assertEqual(ba, ba_pickled)
 
     def test_signature_bound_arguments_repr(self):
-        def foo(a, b, *, c:1={}, **kw) -> {42:'ham'}: pass
+        def foo(a, b, c={}, **kw): pass
         sig = inspect.signature(foo)
         ba = sig.bind(20, 30, z={})
         self.assertRegex(repr(ba), r'<BoundArguments \(a=20,.*\}\}\)>')
 
     def test_signature_bound_arguments_apply_defaults(self):
-        def foo(a, b=1, *args, c:1={}, **kw): pass
+        def foo(a, b=1, c={}, *args, **kw): pass
         sig = inspect.signature(foo)
 
         ba = sig.bind(20)
         ba.apply_defaults()
         self.assertEqual(
             list(ba.arguments.items()),
-            [('a', 20), ('b', 1), ('args', ()), ('c', {}), ('kw', {})])
+            [('a', 20), ('b', 1), ('c', {}), ('args', ()), ('kw', {})])
 
-        # Make sure that we preserve the order:
-        # i.e. 'c' should be *before* 'kw'.
-        ba = sig.bind(10, 20, 30, d=1)
+        ba = sig.bind(10, 20, 30, 40, d=1)
         ba.apply_defaults()
         self.assertEqual(
             list(ba.arguments.items()),
-            [('a', 10), ('b', 20), ('args', (30,)), ('c', {}), ('kw', {'d':1})])
+            [('a', 10), ('b', 20), ('c', 30), ('args', (40,)), ('kw', {'d':1})])
+
+        try:
+            foo = make_function('def test(a, b=1, *args, c:1={}, **kw): pass')
+        except SyntaxError:
+            pass
+        else:
+            sig = inspect.signature(foo)
+
+            ba = sig.bind(20)
+            ba.apply_defaults()
+            self.assertEqual(
+                list(ba.arguments.items()),
+                [('a', 20), ('b', 1), ('args', ()), ('c', {}), ('kw', {})])
+
+            # Make sure that we preserve the order:
+            # i.e. 'c' should be *before* 'kw'.
+            ba = sig.bind(10, 20, 30, d=1)
+            ba.apply_defaults()
+            self.assertEqual(
+                list(ba.arguments.items()),
+                [('a', 10), ('b', 20), ('args', (30,)), ('c', {}), ('kw', {'d':1})])
 
         # Make sure that BoundArguments produced by bind_partial()
         # are supported.
