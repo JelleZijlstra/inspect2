@@ -492,7 +492,7 @@ def getmro(cls):
 
 # -------------------------------------------------------- function helpers
 
-def unwrap(func, *, stop=None):
+def unwrap(func, stop=None):
     """Get the object wrapped by *func*.
 
    Follows the chain of :attr:`__wrapped__` attributes returning the last
@@ -2181,7 +2181,7 @@ def _signature_from_function(cls, func):
                __validate_parameters__=is_duck_function)
 
 
-def _signature_from_callable(obj, *,
+def _signature_from_callable(obj,
                              follow_wrapper_chains=True,
                              skip_bound_arg=True,
                              sigcls):
@@ -2472,7 +2472,7 @@ class Parameter:
 
     empty = _empty
 
-    def __init__(self, name, kind, *, default=_empty, annotation=_empty):
+    def __init__(self, name, kind, default=_empty, annotation=_empty):
 
         if kind not in (_POSITIONAL_ONLY, _POSITIONAL_OR_KEYWORD,
                         _VAR_POSITIONAL, _KEYWORD_ONLY, _VAR_KEYWORD):
@@ -2537,7 +2537,7 @@ class Parameter:
     def kind(self):
         return self._kind
 
-    def replace(self, *, name=_void, kind=_void,
+    def replace(self, name=_void, kind=_void,
                 annotation=_void, default=_void):
         """Creates a customized copy of the Parameter."""
 
@@ -2751,7 +2751,7 @@ class Signature:
 
     empty = _empty
 
-    def __init__(self, parameters=None, *, return_annotation=_empty,
+    def __init__(self, parameters=None, return_annotation=_empty,
                  __validate_parameters__=True):
         """Constructs Signature from the given list of Parameter
         objects and 'return_annotation'.  All arguments are optional.
@@ -2821,7 +2821,7 @@ class Signature:
         return _signature_from_builtin(cls, func)
 
     @classmethod
-    def from_callable(cls, obj, *, follow_wrapped=True):
+    def from_callable(cls, obj, follow_wrapped=True):
         """Constructs Signature for the given callable object."""
         return _signature_from_callable(obj, sigcls=cls,
                                         follow_wrapper_chains=follow_wrapped)
@@ -2834,7 +2834,7 @@ class Signature:
     def return_annotation(self):
         return self._return_annotation
 
-    def replace(self, *, parameters=_void, return_annotation=_void):
+    def replace(self, parameters=_void, return_annotation=_void):
         """Creates a customized copy of the Signature.
         Pass 'parameters' and/or 'return_annotation' arguments
         to override them in the new copy.
@@ -2870,7 +2870,7 @@ class Signature:
             return NotImplemented
         return self._hash_basis() == other._hash_basis()
 
-    def _bind(self, args, kwargs, *, partial=False):
+    def _bind(self, args, kwargs, partial=False):
         """Private method. Don't use directly."""
 
         arguments = OrderedDict()
@@ -3072,7 +3072,7 @@ class Signature:
         return rendered
 
 
-def signature(obj, *, follow_wrapped=True):
+def signature(obj, follow_wrapped=True):
     """Get a signature object for the passed callable."""
     return Signature.from_callable(obj, follow_wrapped=follow_wrapped)
 
