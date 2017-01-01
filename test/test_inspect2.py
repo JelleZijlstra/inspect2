@@ -1,5 +1,4 @@
 from __future__ import print_function
-import builtins
 import collections
 import datetime
 import functools
@@ -102,7 +101,6 @@ if HAS_TYPES_COROUTINE:
     @types.coroutine
     def gen_coroutine_function_example(self):
         yield
-        return 'spam'
 
 class EqualsToAll:
     def __eq__(self, other):
