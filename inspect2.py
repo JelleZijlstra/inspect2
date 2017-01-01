@@ -25,6 +25,7 @@ Here are some of the useful functions provided by this module:
 
     signature() - get a Signature object for the callable
 """
+from __future__ import print_function
 
 # This module is in the public domain.  No warranties.
 
@@ -2184,11 +2185,14 @@ def _signature_from_function(cls, func):
 def _signature_from_callable(obj,
                              follow_wrapper_chains=True,
                              skip_bound_arg=True,
-                             sigcls):
+                             sigcls=None):
 
     """Private helper function to get signature for arbitrary
     callable objects.
     """
+
+    if sigcls is None:
+        raise TypeError('sigcls must be given')
 
     if not callable(obj):
         raise TypeError('{!r} is not a callable object'.format(obj))
