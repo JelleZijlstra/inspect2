@@ -34,8 +34,22 @@ __author__ = ('Ka-Ping Yee <ping@lfw.org>',
 
 import ast
 import dis
-import collections.abc
-import importlib.machinery
+try:
+    import collections.abc
+except ImportError:
+    # This doesn't exist in 2.7, but it's only used for Awaitable, which is in a function
+    # that is not used in 2.7 anyway.
+    pass
+try:
+    from importlib import machinery
+    from importlib.machinery import DEBUG_BYTECODE_SUFFIXES, SOURCE_SUFFIXES
+except ImportError:
+    import imp
+    DEBUG_BYTECODE_SUFFIXES = ['.pyc']
+    SOURCE_SUFFIXES = ['.py']
+    _HAS_MACHINERY = False
+else:
+    _HAS_MACHINERY = True
 import itertools
 import linecache
 import os
@@ -673,12 +687,30 @@ def getfile(object):
     raise TypeError('{!r} is not a module, class, method, '
                     'function, traceback, frame, or code object'.format(object))
 
+def _all_suffixes():
+    if _HAS_MACHINERY:
+        return machinery.all_suffixes()
+    else:
+        return [info[0] for info in imp.get_suffixes()]
+
+def _extension_suffixes():
+    if _HAS_MACHINERY:
+        return machinery.EXTENSION_SUFFIXES
+    else:
+        return [suffix for suffix in _all_suffixes() if suffix.endswith('.so')]
+
+def _optimized_bytecode_suffixes():
+    if '.pyo' in _all_suffixes():
+        return ['.pyo']
+    else:
+        return ['.pyc']
+
 def getmodulename(path):
     """Return the module name for a given file, or None."""
     fname = os.path.basename(path)
     # Check for paths that look like an actual module file
     suffixes = [(-len(suffix), suffix)
-                    for suffix in importlib.machinery.all_suffixes()]
+                    for suffix in _all_suffixes()]
     suffixes.sort() # try longest suffixes first, in case they overlap
     for neglen, suffix in suffixes:
         if fname.endswith(suffix):
@@ -690,13 +722,11 @@ def getsourcefile(object):
     Return None if no way can be identified to get the source.
     """
     filename = getfile(object)
-    all_bytecode_suffixes = importlib.machinery.DEBUG_BYTECODE_SUFFIXES[:]
-    all_bytecode_suffixes += importlib.machinery.OPTIMIZED_BYTECODE_SUFFIXES[:]
+    all_bytecode_suffixes = DEBUG_BYTECODE_SUFFIXES[:]
+    all_bytecode_suffixes += _optimized_bytecode_suffixes()
     if any(filename.endswith(s) for s in all_bytecode_suffixes):
-        filename = (os.path.splitext(filename)[0] +
-                    importlib.machinery.SOURCE_SUFFIXES[0])
-    elif any(filename.endswith(s) for s in
-                 importlib.machinery.EXTENSION_SUFFIXES):
+        filename = (os.path.splitext(filename)[0] + SOURCE_SUFFIXES[0])
+    elif any(filename.endswith(s) for s in _extension_suffixes()):
         return None
     if os.path.exists(filename):
         return filename
