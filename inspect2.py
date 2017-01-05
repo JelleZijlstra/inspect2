@@ -60,7 +60,10 @@ import token
 import types
 import warnings
 import functools
-import builtins
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
 from operator import attrgetter
 from collections import namedtuple, OrderedDict
 
@@ -789,7 +792,7 @@ def getmodule(object, _filename=None):
         if mainobject is object:
             return main
     # Check builtins
-    builtin = sys.modules['builtins']
+    builtin = builtins
     if hasattr(builtin, object.__name__):
         builtinobject = getattr(builtin, object.__name__)
         if builtinobject is object:
@@ -1224,7 +1227,7 @@ def formatannotation(annotation, base_module=None):
     if getattr(annotation, '__module__', None) == 'typing':
         return repr(annotation).replace('typing.', '')
     if isinstance(annotation, type):
-        if annotation.__module__ in ('builtins', base_module):
+        if annotation.__module__ in (builtins.__name__, base_module):
             return annotation.__qualname__
         return annotation.__module__+'.'+annotation.__qualname__
     return repr(annotation)
