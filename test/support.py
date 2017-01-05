@@ -29,6 +29,16 @@ def maybe_subtest(test_case, **kwargs):
             print('failed in subtest: {}'.format(kwargs))
             raise
 
+@contextlib.contextmanager
+def override(obj, attribute, new_value):
+    """Temporarily replaces an attribute on an object."""
+    old_value = getattr(obj, attribute)
+    try:
+        setattr(obj, attribute, new_value)
+        yield
+    finally:
+        setattr(obj, attribute, old_value)
+
 # Copied from subprocess._optim_args_from_interpreter_flags in 3.6
 def optim_args_from_interpreter_flags():
     """Return a list of command-line arguments reproducing the current

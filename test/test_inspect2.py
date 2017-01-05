@@ -20,7 +20,6 @@ import types
 import textwrap
 import unicodedata
 import unittest
-import unittest.mock
 import warnings
 
 try:
@@ -33,7 +32,7 @@ from . import inspect_fodder2 as mod2
 from . import support
 from .support import (
     assert_python_ok, assert_python_failure, cpython_only, DirsOnSysPath, MISSING_C_DOCSTRINGS,
-    maybe_subtest, ready_to_import, run_unittest, TESTFN
+    maybe_subtest, override, ready_to_import, run_unittest, TESTFN
 )
 
 
@@ -2220,7 +2219,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
                 return True
             return _orig_isdesc(obj)
 
-        with unittest.mock.patch('inspect2.ismethoddescriptor', _isdesc):
+        with override(inspect, 'ismethoddescriptor', _isdesc):
             builtin_func = funclike(func)
             # Make sure that our mock setup is working
             self.assertFalse(inspect.ismethoddescriptor(builtin_func))
