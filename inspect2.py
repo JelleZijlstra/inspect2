@@ -71,7 +71,20 @@ from collections import namedtuple, OrderedDict
 # We try to get them from dis to avoid duplication
 _flags = set()
 mod_dict = globals()
-for k, v in dis.COMPILER_FLAG_NAMES.items():
+try:
+    flags = dis.COMPILER_FLAG_NAMES
+except AttributeError:
+    # hardcoded flags for 2.7
+    flags = {
+        0x1: 'OPTIMIZED',
+        0x2: 'NEWLOCALS',
+        0x4: 'VARARGS',
+        0x8: 'VARKEYWORDS',
+        0x10: 'NESTED',
+        0x20: 'GENERATOR',
+        0x40: 'NOFREE',
+    }
+for k, v in flags.items():
     mod_dict["CO_" + v] = k
     _flags.add("CO_" + v)
 
