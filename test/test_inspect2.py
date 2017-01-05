@@ -1318,7 +1318,9 @@ class TestGetcallargsFunctions(unittest.TestCase):
         else:
             self.fail('Exception not raised')
         self.assertIs(type(ex1), type(ex2))
-        self.assertEqual(str(ex1), str(ex2))
+        if HAS_KEYWORD_ONLY:
+            # skip these in 2.7 because the exception messages raised by CPython itself changed
+            self.assertEqual(str(ex1), str(ex2))
         del ex1, ex2
 
     def makeCallable(self, signature):
@@ -1380,6 +1382,7 @@ class TestGetcallargsFunctions(unittest.TestCase):
         self.assertEqualCallArgs(f, '**UserDict(a=1, b=2)')
         self.assertEqualCallArgs(f, 'c=3, **UserDict(a=1, b=2)')
 
+    @unittest.skipUnless(HAS_KEYWORD_ONLY, 'tests keyword-only arguments')
     def test_keyword_only(self):
         f = self.makeCallable('a=3, *, c, d=2')
         self.assertEqualCallArgs(f, 'c=3')
@@ -1409,16 +1412,17 @@ class TestGetcallargsFunctions(unittest.TestCase):
                                  '(4,[5,6])]), **UserDict('
                                  'y=9, z=10)')
 
-        f = self.makeCallable('a, b=2, *f, x, y=99, **g')
-        self.assertEqualCallArgs(f, '2, 3, x=8')
-        self.assertEqualCallArgs(f, '2, 3, x=8, *[(4,[5,6]), 7]')
-        self.assertEqualCallArgs(f, '2, x=8, *[3, (4,[5,6]), 7], y=9, z=10')
-        self.assertEqualCallArgs(f, 'x=8, *[2, 3, (4,[5,6])], y=9, z=10')
-        self.assertEqualCallArgs(f, 'x=8, *UserList('
-                                 '[2, 3, (4,[5,6])]), q=0, **{"y":9, "z":10}')
-        self.assertEqualCallArgs(f, '2, x=8, *UserList([3, '
-                                 '(4,[5,6])]), q=0, **UserDict('
-                                 'y=9, z=10)')
+        if HAS_KEYWORD_ONLY:
+            f = self.makeCallable('a, b=2, *f, x, y=99, **g')
+            self.assertEqualCallArgs(f, '2, 3, x=8')
+            self.assertEqualCallArgs(f, '2, 3, x=8, *[(4,[5,6]), 7]')
+            self.assertEqualCallArgs(f, '2, x=8, *[3, (4,[5,6]), 7], y=9, z=10')
+            self.assertEqualCallArgs(f, 'x=8, *[2, 3, (4,[5,6])], y=9, z=10')
+            self.assertEqualCallArgs(f, 'x=8, *UserList('
+                                     '[2, 3, (4,[5,6])]), q=0, **{"y":9, "z":10}')
+            self.assertEqualCallArgs(f, '2, x=8, *UserList([3, '
+                                     '(4,[5,6])]), q=0, **UserDict('
+                                     'y=9, z=10)')
 
     def test_errors(self):
         f0 = self.makeCallable('')
@@ -1461,9 +1465,10 @@ class TestGetcallargsFunctions(unittest.TestCase):
         f3 = self.makeCallable('**c')
         self.assertEqualException(f3, '1, 2')
         self.assertEqualException(f3, '1, 2, a=1, b=2')
-        f4 = self.makeCallable('*, a, b=0')
-        self.assertEqualException(f3, '1, 2')
-        self.assertEqualException(f3, '1, 2, a=1, b=2')
+        if HAS_KEYWORD_ONLY:
+            f4 = self.makeCallable('*, a, b=0')
+            self.assertEqualException(f3, '1, 2')
+            self.assertEqualException(f3, '1, 2, a=1, b=2')
 
         # issue #20816: getcallargs() fails to iterate over non-existent
         # kwonlydefaults and raises a wrong TypeError
