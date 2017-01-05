@@ -3728,19 +3728,30 @@ for __ in range(10):
     @functools.wraps(wrapper)
     def wrapper():
         pass
+
+HAVE_WRAPPED = hasattr(wrapper, '__wrapped__')
 # This behavior was changed in 3.4; see
 # https://bugs.python.org/issue17482
-HAVE_MULTILEVEL_WRAPPED = hasattr(wrapper, '__wrapped__') and wrapper.__wrapped__ is not func
+HAVE_MULTILEVEL_WRAPPED = HAVE_WRAPPED and wrapper.__wrapped__ is not func
 
 
 class TestUnwrap(unittest.TestCase):
 
     def test_unwrap_one(self):
+        def decorator(fn):
+            @functools.wraps(fn)
+            def wrapper(*args, **kwargs):
+                return fn(*args, **kwargs)
+            if not hasattr(wrapper, '__wrapped__'):
+                wrapper.__wrapped__ = fn
+            return wrapper
+
         def func(a, b):
             return a + b
-        wrapper = functools.lru_cache(maxsize=20)(func)
+        wrapper = decorator(func)
         self.assertIs(inspect.unwrap(wrapper), func)
 
+    @unittest.skipUnless(HAVE_WRAPPED, 'requires __wrapped__ to be set')
     def test_unwrap_several(self):
         def func(a, b):
             return a + b
