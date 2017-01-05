@@ -58,6 +58,10 @@ import sys
 import tokenize
 import token
 import types
+try:
+    from types import MappingProxyType
+except ImportError:
+    from collections import OrderedDict as MappingProxyType  # fallback for 2.7
 import warnings
 import functools
 try:
@@ -2189,11 +2193,11 @@ def _signature_from_function(cls, func):
     pos_count = func_code.co_argcount
     arg_names = func_code.co_varnames
     positional = tuple(arg_names[:pos_count])
-    keyword_only_count = func_code.co_kwonlyargcount
+    keyword_only_count = getattr(func_code, 'co_kwonlyargcount', 0)
     keyword_only = arg_names[pos_count:(pos_count + keyword_only_count)]
-    annotations = func.__annotations__
+    annotations = getattr(func, '__annotations__', {})
     defaults = func.__defaults__
-    kwdefaults = func.__kwdefaults__
+    kwdefaults = getattr(func, '__kwdefaults__', {})
 
     if defaults:
         pos_default_count = len(defaults)
@@ -2275,6 +2279,10 @@ def _signature_from_callable(obj,
             skip_bound_arg=skip_bound_arg,
             sigcls=sigcls
         )
+
+    if isinstance(obj, types.MethodType) and obj.__self__ is None and hasattr(obj, 'im_class'):
+        # py 2.7 unbound method
+        obj = obj.__func__
 
     if isinstance(obj, types.MethodType):
         # In this case we skip the first parameter of the underlying
@@ -2512,6 +2520,19 @@ _VAR_POSITIONAL          = _ParameterKind.VAR_POSITIONAL
 _KEYWORD_ONLY            = _ParameterKind.KEYWORD_ONLY
 _VAR_KEYWORD             = _ParameterKind.VAR_KEYWORD
 
+if hasattr(str, 'isidentifier'):
+    _is_identifier = str.isidentifier
+else:
+    def _is_identifier(name):
+        # if it's an identifier, then ast.parse will parse it into a Name node
+        try:
+            tree = ast.parse(name)
+        except SyntaxError:
+            return False
+        return (isinstance(tree, ast.Module) and
+                isinstance(tree.body[0], ast.Expr) and
+                isinstance(tree.body[0].value, ast.Name))
+
 
 class Parameter:
     """Represents a parameter in a function signature.
@@ -2579,7 +2600,7 @@ class Parameter:
             self._kind = _POSITIONAL_ONLY
             name = 'implicit{}'.format(name[1:])
 
-        if not name.isidentifier():
+        if not _is_identifier(name):
             raise ValueError('{!r} is not a valid parameter name'.format(name))
 
         self._name = name
@@ -2794,7 +2815,7 @@ class BoundArguments:
         return '<{} ({})>'.format(self.__class__.__name__, ', '.join(args))
 
 
-class Signature:
+class Signature(object):
     """A Signature object represents the overall signature of a function.
     It stores a Parameter object for each parameter accepted by the
     function, as well as information specific to the function itself.
@@ -2872,7 +2893,7 @@ class Signature:
                 params = OrderedDict(((param.name, param)
                                                 for param in parameters))
 
-        self._parameters = types.MappingProxyType(params)
+        self._parameters = MappingProxyType(params)
         self._return_annotation = return_annotation
 
     @classmethod

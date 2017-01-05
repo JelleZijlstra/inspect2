@@ -4,6 +4,34 @@ try:
 except ImportError:
     import __builtin__ as builtins
 import collections
+try:
+    from collections import UserList
+except ImportError:
+    class UserList(object):
+        def __init__(self, elts):
+            self._elts = elts
+
+        def __iter__(self):
+            for elt in self._elts:
+                yield elt
+try:
+    from collections import UserDict
+except ImportError:
+    from collections import Mapping
+    class UserDict(collections.Mapping):
+        def __init__(self, **items):
+            self._items = items
+
+        def __iter__(self):
+            for key in self._items:
+                yield key
+
+        def __getitem__(self, key):
+            return self._items[key]
+
+        def __len__(self):
+            return len(self._items)
+
 import datetime
 import functools
 import importlib
@@ -1315,11 +1343,11 @@ class TestGetcallargsFunctions(unittest.TestCase):
         self.assertEqualCallArgs(f, '2, **{"b":3}')
         self.assertEqualCallArgs(f, '**{"b":3, "a":2}')
         # expand UserList / UserDict
-        self.assertEqualCallArgs(f, '*collections.UserList([2])')
-        self.assertEqualCallArgs(f, '*collections.UserList([2, 3])')
-        self.assertEqualCallArgs(f, '**collections.UserDict(a=2)')
-        self.assertEqualCallArgs(f, '2, **collections.UserDict(b=3)')
-        self.assertEqualCallArgs(f, 'b=2, **collections.UserDict(a=3)')
+        self.assertEqualCallArgs(f, '*UserList([2])')
+        self.assertEqualCallArgs(f, '*UserList([2, 3])')
+        self.assertEqualCallArgs(f, '**UserDict(a=2)')
+        self.assertEqualCallArgs(f, '2, **UserDict(b=3)')
+        self.assertEqualCallArgs(f, 'b=2, **UserDict(a=3)')
 
     def test_varargs(self):
         f = self.makeCallable('a, b=1, *c')
@@ -1328,7 +1356,7 @@ class TestGetcallargsFunctions(unittest.TestCase):
         self.assertEqualCallArgs(f, '2, 3, 4')
         self.assertEqualCallArgs(f, '*(2,3,4)')
         self.assertEqualCallArgs(f, '2, *[3,4]')
-        self.assertEqualCallArgs(f, '2, 3, *collections.UserList([4])')
+        self.assertEqualCallArgs(f, '2, 3, *UserList([4])')
 
     def test_varkw(self):
         f = self.makeCallable('a, b=1, **c')
@@ -1338,9 +1366,9 @@ class TestGetcallargsFunctions(unittest.TestCase):
         self.assertEqualCallArgs(f, 'c=4, **{"a":2, "b":3}')
         self.assertEqualCallArgs(f, '2, c=4, **{"b":3}')
         self.assertEqualCallArgs(f, 'b=2, **{"a":3, "c":4}')
-        self.assertEqualCallArgs(f, '**collections.UserDict(a=2, b=3, c=4)')
-        self.assertEqualCallArgs(f, '2, c=4, **collections.UserDict(b=3)')
-        self.assertEqualCallArgs(f, 'b=2, **collections.UserDict(a=3, c=4)')
+        self.assertEqualCallArgs(f, '**UserDict(a=2, b=3, c=4)')
+        self.assertEqualCallArgs(f, '2, c=4, **UserDict(b=3)')
+        self.assertEqualCallArgs(f, 'b=2, **UserDict(a=3, c=4)')
 
     def test_varkw_only(self):
         # issue11256:
@@ -1349,8 +1377,8 @@ class TestGetcallargsFunctions(unittest.TestCase):
         self.assertEqualCallArgs(f, 'a=1')
         self.assertEqualCallArgs(f, 'a=1, b=2')
         self.assertEqualCallArgs(f, 'c=3, **{"a": 1, "b": 2}')
-        self.assertEqualCallArgs(f, '**collections.UserDict(a=1, b=2)')
-        self.assertEqualCallArgs(f, 'c=3, **collections.UserDict(a=1, b=2)')
+        self.assertEqualCallArgs(f, '**UserDict(a=1, b=2)')
+        self.assertEqualCallArgs(f, 'c=3, **UserDict(a=1, b=2)')
 
     def test_keyword_only(self):
         f = self.makeCallable('a=3, *, c, d=2')
@@ -1375,10 +1403,10 @@ class TestGetcallargsFunctions(unittest.TestCase):
         self.assertEqualCallArgs(f, '2, 3, x=8, *[(4,[5,6]), 7]')
         self.assertEqualCallArgs(f, '2, x=8, *[3, (4,[5,6]), 7], y=9')
         self.assertEqualCallArgs(f, 'x=8, *[2, 3, (4,[5,6])], y=9')
-        self.assertEqualCallArgs(f, 'x=8, *collections.UserList('
+        self.assertEqualCallArgs(f, 'x=8, *UserList('
                                  '[2, 3, (4,[5,6])]), **{"y":9, "z":10}')
-        self.assertEqualCallArgs(f, '2, x=8, *collections.UserList([3, '
-                                 '(4,[5,6])]), **collections.UserDict('
+        self.assertEqualCallArgs(f, '2, x=8, *UserList([3, '
+                                 '(4,[5,6])]), **UserDict('
                                  'y=9, z=10)')
 
         f = self.makeCallable('a, b=2, *f, x, y=99, **g')
@@ -1386,10 +1414,10 @@ class TestGetcallargsFunctions(unittest.TestCase):
         self.assertEqualCallArgs(f, '2, 3, x=8, *[(4,[5,6]), 7]')
         self.assertEqualCallArgs(f, '2, x=8, *[3, (4,[5,6]), 7], y=9, z=10')
         self.assertEqualCallArgs(f, 'x=8, *[2, 3, (4,[5,6])], y=9, z=10')
-        self.assertEqualCallArgs(f, 'x=8, *collections.UserList('
+        self.assertEqualCallArgs(f, 'x=8, *UserList('
                                  '[2, 3, (4,[5,6])]), q=0, **{"y":9, "z":10}')
-        self.assertEqualCallArgs(f, '2, x=8, *collections.UserList([3, '
-                                 '(4,[5,6])]), q=0, **collections.UserDict('
+        self.assertEqualCallArgs(f, '2, x=8, *UserList([3, '
+                                 '(4,[5,6])]), q=0, **UserDict('
                                  'y=9, z=10)')
 
     def test_errors(self):
