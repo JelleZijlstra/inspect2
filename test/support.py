@@ -1,4 +1,5 @@
 """Support functions for inspect tests. Copied from various places in CPython."""
+from __future__ import print_function
 
 import collections
 import contextlib

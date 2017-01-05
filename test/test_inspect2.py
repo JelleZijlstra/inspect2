@@ -3730,7 +3730,7 @@ for __ in range(10):
         pass
 # This behavior was changed in 3.4; see
 # https://bugs.python.org/issue17482
-HAVE_MULTILEVEL_WRAPPED = wrapper.__wrapped__ is not func
+HAVE_MULTILEVEL_WRAPPED = hasattr(wrapper, '__wrapped__') and wrapper.__wrapped__ is not func
 
 
 class TestUnwrap(unittest.TestCase):
