@@ -8,7 +8,10 @@ import io
 import linecache
 import os
 from os.path import normcase
-import _pickle
+try:
+    from _pickle import Pickler
+except ImportError:
+    from cPickle import Pickler
 import pickle
 import shutil
 import six
@@ -809,15 +812,16 @@ class TestClassesAndFunctions(unittest.TestCase):
         spec = inspect.getfullargspec(test)
         self.assertEqual({}, spec.annotations)
 
-    @unittest.skipUnless(hasattr(_pickle.Pickler.dump, '__text__signature__'),
+    @unittest.skipUnless(hasattr(Pickler, 'dump') and
+                         hasattr(Pickler.dump, '__text__signature__'),
                          "requires __text_signature__ on builtins")
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
                      "Signature information for builtins requires docstrings")
     def test_getfullargspec_builtin_methods(self):
-        self.assertFullArgSpecEquals(_pickle.Pickler.dump,
+        self.assertFullArgSpecEquals(Pickler.dump,
                                      args_e=['self', 'obj'], formatted='(self, obj)')
 
-        self.assertFullArgSpecEquals(_pickle.Pickler(io.BytesIO()).dump,
+        self.assertFullArgSpecEquals(Pickler(io.BytesIO()).dump,
                                      args_e=['self', 'obj'], formatted='(self, obj)')
 
         self.assertFullArgSpecEquals(
@@ -2077,11 +2081,11 @@ def test(a, b:'foo'=10, *args:'bar', spam:'baz', ham=123, **kwargs:int):
 
         # normal method
         # (PyMethodDescr_Type, "method_descriptor")
-        if not hasattr(_pickle.Pickler.dump, '__text_signature__'):
+        if not hasattr(Pickler, 'dump') or not hasattr(Pickler.dump, '__text_signature__'):
             # no point in testing the rest of these if we don't have signatures on builtins
             return
-        test_unbound_method(_pickle.Pickler.dump)
-        d = _pickle.Pickler(io.StringIO())
+        test_unbound_method(Pickler.dump)
+        d = Pickler(io.StringIO())
         test_callable(d.dump)
 
         # static method
@@ -2780,18 +2784,19 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
         with self.assertRaisesRegex(ValueError, "callable.*is not supported"):
             self.assertEqual(inspect.signature(D), None)
 
+    @unittest.skipUnless(isinstance(Pickler, type), 'requires Pickler to be a class')
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
                      "Signature information for builtins requires docstrings")
     def test_signature_on_builtin_class(self):
-        if hasattr(_pickle.Pickler, '__text_signature__'):
-            self.assertEqual(str(inspect.signature(_pickle.Pickler)),
+        if hasattr(Pickler, '__text_signature__'):
+            self.assertEqual(str(inspect.signature(Pickler)),
                              '(file, protocol=None, fix_imports=True)')
 
-        class P(_pickle.Pickler): pass
+        class P(Pickler): pass
         class EmptyTrait: pass
         class P2(EmptyTrait, P): pass
 
-        if hasattr(_pickle.Pickler, '__text_signature__'):
+        if hasattr(Pickler, '__text_signature__'):
             self.assertEqual(str(inspect.signature(P)),
                              '(file, protocol=None, fix_imports=True)')
             self.assertEqual(str(inspect.signature(P2)),
@@ -3094,13 +3099,13 @@ class Spam:
         foo_sig = MySignature.from_callable(foo)
         self.assertTrue(isinstance(foo_sig, MySignature))
 
-    @unittest.skipUnless(hasattr(_pickle.Pickler, '__text_signature__'),
+    @unittest.skipUnless(hasattr(Pickler, '__text_signature__'),
                          "must have signature information on builtins")
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
                      "Signature information for builtins requires docstrings")
     def test_signature_from_callable_builtin_obj(self):
         class MySignature(inspect.Signature): pass
-        sig = MySignature.from_callable(_pickle.Pickler)
+        sig = MySignature.from_callable(Pickler)
         self.assertTrue(isinstance(sig, MySignature))
 
 
