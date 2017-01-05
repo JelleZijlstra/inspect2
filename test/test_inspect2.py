@@ -682,7 +682,7 @@ class TestNoEOL(GetSourceBase):
         with DirsOnSysPath(self.tempdir):
             import inspect_fodder3 as mod3
         self.fodderModule = mod3
-        super().setUp()
+        super(TestNoEOL, self).setUp()
 
     def tearDown(self):
         shutil.rmtree(self.tempdir)
@@ -1011,7 +1011,7 @@ class TestClassesAndFunctions(unittest.TestCase):
             def __getattr__(self, name):
                 if name == 'ham':
                     return 'spam'
-                return super().__getattr__(name)
+                return super(Meta, self).__getattr__(name)
         class VA(six.with_metaclass(Meta)):
             @types.DynamicClassAttribute
             def ham(self):
@@ -1053,7 +1053,7 @@ class TestClassesAndFunctions(unittest.TestCase):
             def __getattr__(self, name):
                 if name =='BOOM':
                     return 42
-                return super().__getattr(name)
+                return super(Meta, self).__getattr(name)
         class Class(six.with_metaclass(Meta)):
             pass
         should_find = inspect.Attribute('BOOM', 'data', Meta, 42)
@@ -1066,14 +1066,14 @@ class TestClassesAndFunctions(unittest.TestCase):
             def __getattr__(self, name):
                 if name =='one':
                     return 1
-                return super().__getattr__(name)
+                return super(Meta1, self).__getattr__(name)
         class Meta2(type):
             def __dir__(cls):
                 return ['__class__', '__module__', '__name__', 'two']
             def __getattr__(self, name):
                 if name =='two':
                     return 2
-                return super().__getattr__(name)
+                return super(Meta2, self).__getattr__(name)
         class Meta3(Meta1, Meta2):
             def __dir__(cls):
                 return list(sorted(set(['__class__', '__module__', '__name__', 'three'] +
@@ -1081,7 +1081,7 @@ class TestClassesAndFunctions(unittest.TestCase):
             def __getattr__(self, name):
                 if name =='three':
                     return 3
-                return super().__getattr__(name)
+                return super(Meta3, self).__getattr__(name)
         class Class1(six.with_metaclass(Meta1)):
             pass
         class Class2(six.with_metaclass(Meta3, Class1)):
@@ -1152,7 +1152,7 @@ class TestClassesAndFunctions(unittest.TestCase):
             def __getattr__(cls, name):
                 if name == 'eggs':
                     return 'scrambled'
-                return super().__getattr__(name)
+                return super(M, cls).__getattr__(name)
         class A(six.with_metaclass(M)):
             @types.DynamicClassAttribute
             def eggs(self):
@@ -1735,7 +1735,7 @@ class TestGetattrStatic(unittest.TestCase):
         class Custom(dict):
             def get(self, key, default=None):
                 test.called = True
-                super().get(key, default)
+                super(Custom, self).get(key, default)
 
         class Foo(object):
             a = 3
@@ -1992,6 +1992,50 @@ class TestSignatureObject(unittest.TestCase):
 
         self.assertEqual(str(S()), '()')
 
+        test = make_function('def test(po, pk, pod=42, pkd=100, *args, **kwargs): pass')
+        sig = inspect.signature(test)
+        po = sig.parameters['po'].replace(kind=P.POSITIONAL_ONLY)
+        pod = sig.parameters['pod'].replace(kind=P.POSITIONAL_ONLY)
+        pk = sig.parameters['pk']
+        pkd = sig.parameters['pkd']
+        args = sig.parameters['args']
+        kwargs = sig.parameters['kwargs']
+
+        S((po, pk, args, kwargs))
+
+        with self.assertRaisesRegexp(ValueError, 'wrong parameter order'):
+            S((pk, po, args, kwargs))
+
+        with self.assertRaisesRegexp(ValueError, 'wrong parameter order'):
+            S((po, args, pk, kwargs))
+
+        with self.assertRaisesRegexp(ValueError, 'wrong parameter order'):
+            S((args, po, pk, kwargs))
+
+        kwargs2 = kwargs.replace(name='args')
+        with self.assertRaisesRegexp(ValueError, 'duplicate parameter name'):
+            S((po, pk, args, kwargs2))
+
+        with self.assertRaisesRegexp(ValueError, 'follows default argument'):
+            S((pod, po))
+
+        with self.assertRaisesRegexp(ValueError, 'follows default argument'):
+            S((po, pkd, pk))
+
+        with self.assertRaisesRegexp(ValueError, 'follows default argument'):
+            S((pkd, pk))
+
+        self.assertTrue(repr(sig).startswith('<Signature'))
+        self.assertTrue('(po, pk' in repr(sig))
+
+    @unittest.skipUnless(HAS_KEYWORD_ONLY,
+                         'requires keyword-only arguments')
+    def test_signature_object_py3(self):
+        S = inspect.Signature
+        P = inspect.Parameter
+
+        self.assertEqual(str(S()), '()')
+
         test = make_function('def test(po, pk, pod=42, pkd=100, *args, ko, **kwargs): pass')
         sig = inspect.signature(test)
         po = sig.parameters['po'].replace(kind=P.POSITIONAL_ONLY)
@@ -2033,32 +2077,42 @@ class TestSignatureObject(unittest.TestCase):
         self.assertTrue('(po, pk' in repr(sig))
 
     def test_signature_object_pickle(self):
-        foo = make_function("def test(a, b, *, c:1={}, **kw) -> {42:'ham'}: pass")
-        foo_partial = functools.partial(foo, a=1)
+        funcs = [
+            "def test(a, b, *, c:1={}, **kw) -> {42:'ham'}: pass",
+            "def test(a, b, c={}, **kw): pass",
+            "def test(a, b, c={}, *args, **kw): pass",
+        ]
+        for func_code in funcs:
+            try:
+                foo = make_function(func_code)
+            except SyntaxError:
+                continue
+            foo_partial = functools.partial(foo, a=1)
 
-        sig = inspect.signature(foo_partial)
+            sig = inspect.signature(foo_partial)
 
-        for ver in range(pickle.HIGHEST_PROTOCOL + 1):
-            with maybe_subtest(self, pickle_ver=ver, subclass=False):
-                sig_pickled = pickle.loads(pickle.dumps(sig, ver))
-                self.assertEqual(sig, sig_pickled)
+            for ver in range(pickle.HIGHEST_PROTOCOL + 1):
+                with maybe_subtest(self, pickle_ver=ver, subclass=False, code=func_code):
+                    sig_pickled = pickle.loads(pickle.dumps(sig, ver))
+                    self.assertEqual(sig, sig_pickled)
 
-        # Test that basic sub-classing works
-        sig = inspect.signature(foo)
-        myparam = MyParameter(name='z', kind=inspect.Parameter.POSITIONAL_ONLY)
-        myparams = collections.OrderedDict(sig.parameters, a=myparam)
-        mysig = MySignature().replace(parameters=myparams.values(),
-                                      return_annotation=sig.return_annotation)
-        self.assertTrue(isinstance(mysig, MySignature))
-        self.assertTrue(isinstance(mysig.parameters['z'], MyParameter))
+            with maybe_subtest(self, code=func_code):
+                # Test that basic sub-classing works
+                sig = inspect.signature(foo)
+                myparam = MyParameter(name='z', kind=inspect.Parameter.POSITIONAL_ONLY)
+                myparams = collections.OrderedDict(sig.parameters, a=myparam)
+                mysig = MySignature().replace(parameters=myparams.values(),
+                                              return_annotation=sig.return_annotation)
+                self.assertTrue(isinstance(mysig, MySignature))
+                self.assertTrue(isinstance(mysig.parameters['z'], MyParameter))
 
-        for ver in range(pickle.HIGHEST_PROTOCOL + 1):
-            with maybe_subtest(self, pickle_ver=ver, subclass=True):
-                sig_pickled = pickle.loads(pickle.dumps(mysig, ver))
-                self.assertEqual(mysig, sig_pickled)
-                self.assertTrue(isinstance(sig_pickled, MySignature))
-                self.assertTrue(isinstance(sig_pickled.parameters['z'],
-                                           MyParameter))
+            for ver in range(pickle.HIGHEST_PROTOCOL + 1):
+                with maybe_subtest(self, pickle_ver=ver, subclass=True, code=func_code):
+                    sig_pickled = pickle.loads(pickle.dumps(mysig, ver))
+                    self.assertEqual(mysig, sig_pickled)
+                    self.assertTrue(isinstance(sig_pickled, MySignature))
+                    self.assertTrue(isinstance(sig_pickled.parameters['z'],
+                                               MyParameter))
 
     def test_signature_immutability(self):
         def test(a):
@@ -2241,7 +2295,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
             self.check_signature_from_functionlike_object(func)
 
     def check_signature_from_functionlike_object(self, func):
-        class funclike:
+        class funclike(object):
             # Has to be callable, and have correct
             # __code__, __annotations__, __defaults__, __name__,
             # and __kwdefaults__ attributes
@@ -2249,9 +2303,9 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
             def __init__(self, func):
                 self.__name__ = func.__name__
                 self.__code__ = func.__code__
-                self.__annotations__ = func.__annotations__
+                self.__annotations__ = getattr(func, '__annotations__', {})
                 self.__defaults__ = func.__defaults__
-                self.__kwdefaults__ = func.__kwdefaults__
+                self.__kwdefaults__ = getattr(func, '__kwdefaults__', {})
                 self.func = func
 
             def __call__(self, *args, **kwargs):
@@ -2297,15 +2351,15 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
         def func(a, b, *args, **kwargs):
             pass
 
-        class funclike:
+        class funclike(object):
             def __init__(self, marker):
                 pass
 
             __name__ = func.__name__
             __code__ = func.__code__
-            __annotations__ = func.__annotations__
+            __annotations__ = getattr(func, '__annotations__', {})
             __defaults__ = func.__defaults__
-            __kwdefaults__ = func.__kwdefaults__
+            __kwdefaults__ = getattr(func, '__kwdefaults__', {})
 
         self.assertEqual(str(inspect.signature(funclike)), '(marker)')
 
@@ -2723,7 +2777,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
             wrapper.__signature__ = sig.replace(parameters=new_params)
             return wrapper
 
-        class Foo:
+        class Foo(object):
             @decorator
             def __call__(self, a, b):
                 pass
@@ -2749,7 +2803,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
 
 
     def test_signature_on_class(self):
-        class C:
+        class C(object):
             def __init__(self, a):
                 pass
 
@@ -2770,7 +2824,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
 
         class CM(type):
             def __new__(mcls, name, bases, dct, foo=1):
-                return super().__new__(mcls, name, bases, dct)
+                return super(CM, mcls).__new__(mcls, name, bases, dct)
         class C(six.with_metaclass(CM)):
             def __init__(self, b):
                 pass
@@ -2788,12 +2842,12 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
 
         class CMM(type):
             def __new__(mcls, name, bases, dct, foo=1):
-                return super().__new__(mcls, name, bases, dct)
+                return super(CMM, mcls).__new__(mcls, name, bases, dct)
             def __call__(cls, nm, bs, dt):
                 return type(nm, bs, dt)
         class CM(six.with_metaclass(CMM, type)):
             def __new__(mcls, name, bases, dct, bar=2):
-                return super().__new__(mcls, name, bases, dct)
+                return super(CM, mcls).__new__(mcls, name, bases, dct)
         class C(six.with_metaclass(CM)):
             def __init__(self, b):
                 pass
@@ -2817,7 +2871,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
 
         class CM(type):
             def __init__(cls, name, bases, dct, bar=2):
-                return super().__init__(name, bases, dct)
+                return super(CM, cls).__init__(name, bases, dct)
         class C(six.with_metaclass(CM)):
             def __init__(self, b):
                 pass
@@ -2833,7 +2887,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
                      "Signature information for builtins requires docstrings")
     def test_signature_on_class_without_init(self):
         # Test classes without user-defined __init__ or __new__
-        class C: pass
+        class C(object): pass
         self.assertEqual(str(inspect.signature(C)), '()')
         class D(C): pass
         self.assertEqual(str(inspect.signature(D)), '()')
@@ -2877,7 +2931,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
         self.assertEqual(str(inspect.signature(P4)), '(foo, bar)')
 
     def test_signature_on_callable_objects(self):
-        class Foo:
+        class Foo(object):
             def __call__(self, a):
                 pass
 
@@ -2885,7 +2939,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
                          ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),),
                           Ellipsis))
 
-        class Spam:
+        class Spam(object):
             pass
         with self.assertRaisesRegexp(TypeError, "is not a callable object"):
             inspect.signature(Spam())
@@ -2897,7 +2951,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
                          ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),),
                           Ellipsis))
 
-        class Wrapped:
+        class Wrapped(object):
             pass
         Wrapped.__wrapped__ = lambda a: None
         self.assertEqual(self.signature(Wrapped),

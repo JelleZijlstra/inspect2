@@ -61,7 +61,23 @@ import types
 try:
     from types import MappingProxyType
 except ImportError:
-    from collections import OrderedDict as MappingProxyType  # fallback for 2.7
+    # fallback for 2.7
+    from collections import Mapping, OrderedDict
+
+    class MappingProxyType(Mapping):
+        def __init__(self, *args, **kwargs):
+            self._items = OrderedDict(*args, **kwargs)
+
+        def __getitem__(self, key):
+            return self._items[key]
+
+        def __iter__(self):
+            for key in self._items:
+                yield key
+
+        def __len__(self):
+            return len(self._items)
+
 import warnings
 import functools
 try:
@@ -1849,10 +1865,12 @@ def _signature_get_partial(wrapped_sig, partial, extra_args=()):
 
             if param.kind is _POSITIONAL_OR_KEYWORD:
                 new_param = new_params[param_name].replace(kind=_KEYWORD_ONLY)
+                del new_params[param_name]
                 new_params[param_name] = new_param
-                new_params.move_to_end(param_name)
             elif param.kind in (_KEYWORD_ONLY, _VAR_KEYWORD):
-                new_params.move_to_end(param_name)
+                param = new_params[param_name]
+                del new_params[param_name]
+                new_params[param_name] = param
             elif param.kind is _VAR_POSITIONAL:
                 new_params.pop(param.name)
 
@@ -2534,7 +2552,7 @@ else:
                 isinstance(tree.body[0].value, ast.Name))
 
 
-class Parameter:
+class Parameter(object):
     """Represents a parameter in a function signature.
 
     Has the following public attributes:
