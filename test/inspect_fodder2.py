@@ -98,18 +98,6 @@ def f():
     return X
 method_in_dynamic_class = f().g
 
-#line 101
-def keyworded(*arg1, arg2=1):
-    pass
-
-#line 105
-def annotated(arg1: list):
-    pass
-
-#line 109
-def keyword_only_arg(*, arg):
-    pass
-
 @wrap(lambda: None)
 def func114():
     return 115
@@ -126,12 +114,12 @@ def decorator(func):
         return 42
     return fake
 
-#line 129
+#line 117
 @decorator
 def real():
     return 20
 
-#line 134
+#line 122
 class cls135:
     def func136():
         def func137():

@@ -29,6 +29,10 @@ except ImportError:
 
 from . import inspect_fodder as mod
 from . import inspect_fodder2 as mod2
+try:
+    from . import annotated_inspect_fodder as amod
+except SyntaxError:
+    amod = None
 from . import support
 from .support import (
     assert_python_ok, assert_python_failure, cpython_only, DirsOnSysPath, MISSING_C_DOCSTRINGS,
@@ -518,10 +522,10 @@ class TestDecorators(GetSourceBase):
         self.assertSourceEqual(mod2.gone, 9, 10)
 
     def test_getsource_unwrap(self):
-        self.assertSourceEqual(mod2.real, 130, 132)
+        self.assertSourceEqual(mod2.real, 118, 120)
 
     def test_decorator_with_lambda(self):
-        self.assertSourceEqual(mod2.func114, 113, 115)
+        self.assertSourceEqual(mod2.func114, 101, 103)
 
 class TestOneliners(GetSourceBase):
     fodderModule = mod2
@@ -617,10 +621,10 @@ class TestBuggyCases(GetSourceBase):
             self.assertRaises(IOError, inspect.getsource, co)
 
     def test_getsource_on_method(self):
-        self.assertSourceEqual(mod2.ClassWithMethod.method, 118, 119)
+        self.assertSourceEqual(mod2.ClassWithMethod.method, 106, 107)
 
     def test_nested_func(self):
-        self.assertSourceEqual(mod2.cls135.func136, 136, 139)
+        self.assertSourceEqual(mod2.cls135.func136, 124, 127)
 
 
 class TestNoEOL(GetSourceBase):
@@ -722,25 +726,34 @@ class TestClassesAndFunctions(unittest.TestCase):
                                  'g', 'h', (3, 4, 5),
                                  '(a, b, c, d=3, e=4, f=5, *g, **h)')
 
+        if amod is None:
+            return
         self.assertRaises(ValueError, self.assertArgSpecEquals,
-                          mod2.keyworded, [])
+                          amod.keyworded, [])
 
         self.assertRaises(ValueError, self.assertArgSpecEquals,
-                          mod2.annotated, [])
+                          amod.annotated, [])
         self.assertRaises(ValueError, self.assertArgSpecEquals,
-                          mod2.keyword_only_arg, [])
-
+                          amod.keyword_only_arg, [])
 
     def test_getfullargspec(self):
-        self.assertFullArgSpecEquals(mod2.keyworded, [], varargs_e='arg1',
+        self.assertFullArgSpecEquals(mod.eggs, ['x', 'y'], formatted='(x, y)')
+        self.assertFullArgSpecEquals(mod.spam,
+                                     ['a', 'b', 'c', 'd', 'e', 'f'],
+                                     varargs_e='g', varkw_e='h', defaults_e=(3, 4, 5),
+                                     formatted='(a, b, c, d=3, e=4, f=5, *g, **h)')
+
+        if amod is None:
+            return
+        self.assertFullArgSpecEquals(amod.keyworded, [], varargs_e='arg1',
                                      kwonlyargs_e=['arg2'],
                                      kwonlydefaults_e={'arg2':1},
                                      formatted='(*arg1, arg2=1)')
 
-        self.assertFullArgSpecEquals(mod2.annotated, ['arg1'],
+        self.assertFullArgSpecEquals(amod.annotated, ['arg1'],
                                      ann_e={'arg1' : list},
                                      formatted='(arg1: list)')
-        self.assertFullArgSpecEquals(mod2.keyword_only_arg, [],
+        self.assertFullArgSpecEquals(amod.keyword_only_arg, [],
                                      kwonlyargs_e=['arg'],
                                      formatted='(*, arg)')
 
