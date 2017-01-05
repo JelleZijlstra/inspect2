@@ -561,12 +561,21 @@ def indentsize(line):
     expline = line.expandtabs()
     return len(expline) - len(expline.lstrip())
 
-def _findclass(func):
+def _findclass(func, obj=None):
     cls = sys.modules.get(func.__module__)
     if cls is None:
         return None
-    for name in func.__qualname__.split('.')[:-1]:
-        cls = getattr(cls, name)
+    if hasattr(func, '__qualname__'):
+        for name in func.__qualname__.split('.')[:-1]:
+            cls = getattr(cls, name)
+    else:
+        # fall back to iterating over all the classes in the module and seeing
+        # if they have the property we need
+        name = func.__name__
+        for _, possible_cls in getmembers(cls):
+            if isclass(possible_cls) and getattr(possible_cls, name, None) is obj:
+                cls = possible_cls
+                break
     if not isclass(cls):
         return None
     return cls
@@ -585,13 +594,16 @@ def _finddoc(obj):
 
     if ismethod(obj):
         name = obj.__func__.__name__
-        self = obj.__self__
-        if (isclass(self) and
-            getattr(getattr(self, name, None), '__func__') is obj.__func__):
-            # classmethod
-            cls = self
+        if obj.__self__ is None and hasattr(obj, 'im_class'):
+            cls = obj.im_class
         else:
-            cls = self.__class__
+            self = obj.__self__
+            if (isclass(self) and
+                getattr(getattr(self, name, None), '__func__') is obj.__func__):
+                # classmethod
+                cls = self
+            else:
+                cls = self.__class__
     elif isfunction(obj):
         name = obj.__name__
         cls = _findclass(obj)
@@ -600,8 +612,15 @@ def _finddoc(obj):
     elif isbuiltin(obj):
         name = obj.__name__
         self = obj.__self__
-        if (isclass(self) and
-            self.__qualname__ + '.' + name == obj.__qualname__):
+        if isclass(self):
+            if hasattr(self, '__qualname__'):
+                is_classmethod = self.__qualname__ + '.' + name == obj.__qualname__
+            else:
+                is_classmethod = getattr(self, obj.__name__, None) == obj
+        else:
+            is_classmethod = False
+
+        if is_classmethod:
             # classmethod
             cls = self
         else:
@@ -610,7 +629,7 @@ def _finddoc(obj):
     elif isinstance(obj, property):
         func = obj.fget
         name = func.__name__
-        cls = _findclass(func)
+        cls = _findclass(func, obj=obj)
         if cls is None or getattr(cls, name) is not obj:
             return None
     elif ismethoddescriptor(obj) or isdatadescriptor(obj):
@@ -990,7 +1009,8 @@ def getblock(lines):
     """Extract the block of code at the top of the given list of lines."""
     blockfinder = BlockFinder()
     try:
-        tokens = tokenize.generate_tokens(iter(lines).__next__)
+        iterator = iter(lines)
+        tokens = tokenize.generate_tokens(lambda: next(iterator))
         for _token in tokens:
             blockfinder.tokeneater(*_token)
     except (EndOfBlock, IndentationError):

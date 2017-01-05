@@ -18,7 +18,7 @@ def eggs(x, y):
     q = y / 0
 
 # line 20
-class StupidGit:
+class StupidGit(object):
     """A longer,
 
     indented
@@ -61,7 +61,7 @@ class MalodorousPervert(StupidGit):
 
 Tit = MalodorousPervert
 
-class ParrotDroppings:
+class ParrotDroppings(object):
     pass
 
 class FesteringGob(MalodorousPervert, ParrotDroppings):

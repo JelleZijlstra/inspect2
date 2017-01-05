@@ -1,9 +1,14 @@
 from __future__ import print_function
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
 import collections
 import datetime
 import functools
 import importlib
 import inspect2 as inspect
+import itertools
 import io
 import linecache
 import os
@@ -416,9 +421,13 @@ class TestRetrievingSourceCode(GetSourceBase):
     def test_finddoc(self):
         finddoc = inspect._finddoc
         self.assertEqual(finddoc(int), int.__doc__)
-        self.assertEqual(finddoc(int.to_bytes), int.to_bytes.__doc__)
-        self.assertEqual(finddoc(int().to_bytes), int.to_bytes.__doc__)
-        self.assertEqual(finddoc(int.from_bytes), int.from_bytes.__doc__)
+        self.assertEqual(finddoc(int.conjugate), int.conjugate.__doc__)
+        self.assertEqual(finddoc(int().conjugate), int.conjugate.__doc__)
+        if hasattr(int, 'from_bytes'):
+            self.assertEqual(finddoc(int.from_bytes), int.from_bytes.__doc__)
+        else:
+            self.assertEqual(finddoc(itertools.chain.from_iterable),
+                             itertools.chain.from_iterable.__doc__)
         self.assertEqual(finddoc(int.real), int.real.__doc__)
 
     def test_cleandoc(self):
@@ -439,7 +448,7 @@ class TestRetrievingSourceCode(GetSourceBase):
         # Do it again (check the caching isn't broken)
         self.assertEqual(inspect.getmodule(mod.StupidGit.abuse), mod)
         # Check a builtin
-        self.assertEqual(inspect.getmodule(str), sys.modules["builtins"])
+        self.assertEqual(inspect.getmodule(str), builtins)
         # Check filename override
         self.assertEqual(inspect.getmodule(None, modfile), mod)
 
@@ -489,7 +498,10 @@ class TestRetrievingSourceCode(GetSourceBase):
         getlines = linecache.getlines
         def monkey(filename, module_globals=None):
             if filename == fn:
-                return source.splitlines(keepends=True)
+                try:
+                    return source.splitlines(keepends=True)
+                except TypeError:
+                    return [line + '\n' for line in source.splitlines()]
             else:
                 return getlines(filename, module_globals)
         linecache.getlines = monkey
