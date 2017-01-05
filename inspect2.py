@@ -1732,7 +1732,7 @@ def getcoroutinelocals(coroutine):
 
 _WrapperDescriptor = type(type.__call__)
 _MethodWrapper = type(all.__call__)
-_ClassMethodWrapper = type(int.__dict__['from_bytes'])
+_ClassMethodWrapper = type(itertools.chain.__dict__['from_iterable'])
 
 _NonUserDefinedCallables = (_WrapperDescriptor,
                             _MethodWrapper,
