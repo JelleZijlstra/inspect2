@@ -62,21 +62,24 @@ try:
     from types import MappingProxyType
 except ImportError:
     # fallback for 2.7
-    from collections import Mapping, OrderedDict
+    from collections import Mapping
 
     class MappingProxyType(Mapping):
-        def __init__(self, *args, **kwargs):
-            self._items = OrderedDict(*args, **kwargs)
+        def __init__(self, underlying):
+            self._underlying = underlying
 
         def __getitem__(self, key):
-            return self._items[key]
+            return self._underlying[key]
 
         def __iter__(self):
-            for key in self._items:
+            for key in self._underlying:
                 yield key
 
         def __len__(self):
-            return len(self._items)
+            return len(self._underlying)
+
+        def copy(self):
+            return self._underlying.copy()
 
 import warnings
 import functools
@@ -2981,6 +2984,9 @@ class Signature(object):
         if not isinstance(other, Signature):
             return NotImplemented
         return self._hash_basis() == other._hash_basis()
+
+    def __ne__(self, other):
+        return not (self == other)
 
     def _bind(self, args, kwargs, partial=False):
         """Private method. Don't use directly."""

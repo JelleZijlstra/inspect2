@@ -2130,6 +2130,14 @@ class TestSignatureObject(unittest.TestCase):
             pass
         self.assertEqual(self.signature(test), ((), Ellipsis))
 
+    def test_signature_on_simple_args(self):
+        test = make_function("def test(a, b): pass")
+        self.assertEqual(self.signature(test),
+                         ((('a', Ellipsis, Ellipsis, "positional_or_keyword"),
+                           ('b', Ellipsis, Ellipsis, "positional_or_keyword")),
+                          Ellipsis))
+
+    @unittest.skipUnless(HAS_ANNOTATIONS, 'requires annotations')
     def test_signature_on_wargs(self):
         test = make_function("def test(a, b:'foo') -> 123: pass")
         self.assertEqual(self.signature(test),
@@ -2137,6 +2145,7 @@ class TestSignatureObject(unittest.TestCase):
                            ('b', Ellipsis, 'foo', "positional_or_keyword")),
                           123))
 
+    @unittest.skipUnless(HAS_KEYWORD_ONLY, 'requires keyword-only arguments')
     def test_signature_on_wkwonly(self):
         test = make_function("def test(*, a:float, b:str) -> int: pass")
         self.assertEqual(self.signature(test),
@@ -2144,6 +2153,8 @@ class TestSignatureObject(unittest.TestCase):
                            ('b', Ellipsis, str, "keyword_only")),
                            int))
 
+    @unittest.skipUnless(HAS_ANNOTATIONS and HAS_KEYWORD_ONLY,
+                         'requires annotations and keyword-only arguments')
     def test_signature_on_complex_args(self):
         test = make_function("""
 def test(a, b:'foo'=10, *args:'bar', spam:'baz', ham=123, **kwargs:int):
@@ -2364,7 +2375,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
         self.assertEqual(str(inspect.signature(funclike)), '(marker)')
 
     def test_signature_on_method(self):
-        class Test:
+        class Test(object):
             def __init__(*args):
                 pass
             def m1(self, arg1, arg2=1):
