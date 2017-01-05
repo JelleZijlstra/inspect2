@@ -68,6 +68,7 @@ def revise(filename, *args):
 
 git = mod.StupidGit()
 
+HAS_UNBOUND_METHODS = mod.FesteringGob.abuse is not mod.FesteringGob.__dict__['abuse']
 try:
     exec('def f(x:int): pass')
 except SyntaxError:
@@ -159,7 +160,10 @@ class TestPredicates(IsTestBase):
             # Clear traceback and all the frames and local variables hanging to it.
             tb = None
         self.istest(inspect.isfunction, 'mod.spam')
-        self.istest(inspect.isfunction, 'mod.StupidGit.abuse')
+        if HAS_UNBOUND_METHODS:
+            self.istest(inspect.ismethod, 'mod.StupidGit.abuse')
+        else:
+            self.istest(inspect.isfunction, 'mod.StupidGit.abuse')
         self.istest(inspect.ismethod, 'git.argue')
         self.istest(inspect.ismodule, 'mod')
         self.istest(inspect.isdatadescriptor, 'collections.defaultdict.default_factory')
