@@ -1104,7 +1104,10 @@ def _getfullargs(co):
 
     nargs = co.co_argcount
     names = co.co_varnames
-    nkwargs = co.co_kwonlyargcount
+    try:
+        nkwargs = co.co_kwonlyargcount
+    except AttributeError:
+        nkwargs = 0
     args = list(names[:nargs])
     kwonlyargs = list(names[nargs:nargs+nkwargs])
     step = 0

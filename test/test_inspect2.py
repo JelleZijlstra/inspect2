@@ -302,7 +302,8 @@ class TestInterpreterStack(IsTestBase):
         record = mod.st[0]
         self.assertIs(record.frame, mod.fr)
         self.assertEqual(record.lineno, 16)
-        self.assertEqual(record.filename, mod.__file__)
+        # __file__ is .pyc in py2.7 but .py in py3
+        self.assertEqual(record.filename, mod.__file__.rstrip('c'))
         self.assertEqual(record.function, 'eggs')
         self.assertIn('inspect2.stack()', record.code_context[0])
         self.assertEqual(record.index, 0)
