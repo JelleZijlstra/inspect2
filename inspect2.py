@@ -1987,7 +1987,10 @@ def _signature_strip_non_python_syntax(signature):
 
     lines = [l.encode('ascii') for l in signature.split('\n')]
     generator = functools.partial(next, iter(lines))
-    token_stream = tokenize.tokenize(generator)
+    if sys.version_info >= (3, 0):
+        token_stream = tokenize.tokenize(generator)
+    else:
+        token_stream = tokenize.generate_tokens(generator)
 
     delayed_comma = False
     skip_next_comma = False
@@ -1999,11 +2002,12 @@ def _signature_strip_non_python_syntax(signature):
     ERRORTOKEN = token.ERRORTOKEN
 
     # token stream always starts with ENCODING token, skip it
-    t = next(token_stream)
-    assert t.type == tokenize.ENCODING
+    if hasattr(tokenize, 'ENCODING'):
+        t = next(token_stream)
+        assert t[0] == tokenize.ENCODING
 
     for t in token_stream:
-        type, string = t.type, t.string
+        type, string = t[0], t[1]
 
         if type == OP:
             if string == ',':

@@ -665,8 +665,8 @@ class TestBuggyCases(GetSourceBase):
     def test_findsource_without_filename(self):
         for fname in ['', '<string>']:
             co = compile('x=1', fname, "exec")
-            self.assertRaises(IOError, inspect.findsource, co)
-            self.assertRaises(IOError, inspect.getsource, co)
+            self.assertRaises(OSError, inspect.findsource, co)
+            self.assertRaises(OSError, inspect.getsource, co)
 
     def test_getsource_on_method(self):
         self.assertSourceEqual(mod2.ClassWithMethod.method, 106, 107)
