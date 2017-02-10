@@ -142,9 +142,12 @@ if HAS_TYPES_COROUTINE:
     def gen_coroutine_function_example(self):
         yield
 
-class EqualsToAll:
+class EqualsToAll(object):
     def __eq__(self, other):
         return True
+
+    def __ne__(self, other):
+        return False
 
 class IsTestBase(unittest.TestCase):
     predicates = set([inspect.isbuiltin, inspect.isclass, inspect.iscode,
@@ -678,7 +681,7 @@ class TestNoEOL(GetSourceBase):
         os.mkdir(self.tempdir)
         with open(os.path.join(self.tempdir,
                                'inspect_fodder3%spy' % os.extsep), 'w') as f:
-            f.write("class X:\n    pass # No EOL")
+            f.write("class X(object):\n    pass # No EOL")
         with DirsOnSysPath(self.tempdir):
             import inspect_fodder3 as mod3
         self.fodderModule = mod3
@@ -3708,7 +3711,7 @@ class TestBoundArguments(unittest.TestCase):
         def foo(a, b, c={}, **kw): pass
         sig = inspect.signature(foo)
         ba = sig.bind(20, 30, z={})
-        self.assertRegex(repr(ba), r'<BoundArguments \(a=20,.*\}\}\)>')
+        self.assertRegexpMatches(repr(ba), r'<BoundArguments \(a=20,.*\}\}\)>')
 
     def test_signature_bound_arguments_apply_defaults(self):
         def foo(a, b=1, c={}, *args, **kw): pass

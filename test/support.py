@@ -4,6 +4,7 @@ from __future__ import print_function
 import collections
 import contextlib
 import importlib
+import io
 import os
 import platform
 import re
@@ -337,10 +338,13 @@ def make_script(script_dir, script_basename, source, omit_suffix=False):
         script_filename += os.extsep + 'py'
     script_name = os.path.join(script_dir, script_filename)
     # The script should be encoded to UTF-8, the default string encoding
-    script_file = open(script_name, 'w', encoding='utf-8')
+    script_file = io.open(script_name, 'w', encoding='utf-8')
+    if isinstance(source, bytes):
+        source = source.decode('utf-8')
     script_file.write(source)
     script_file.close()
-    importlib.invalidate_caches()
+    if hasattr(importlib, 'invalidate_caches'):
+        importlib.invalidate_caches()
     return script_name
 
 # Cached result of the expensive test performed in the function below.
@@ -437,15 +441,17 @@ def run_python_until_end(*args, **env_vars):
     proc = subprocess.Popen(cmd_line, stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                          env=env)
-    with proc:
+    try:
         try:
             out, err = proc.communicate()
         finally:
             try:
                 proc.kill()
-            except ProcessLookupError:
+            except OSError:
                 pass  # process may have already exited
             subprocess._cleanup()
+    finally:
+        proc.wait()
     rc = proc.returncode
     err = strip_python_stderr(err)
     return _PythonRunResult(rc, out, err), cmd_line

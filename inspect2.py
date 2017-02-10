@@ -973,7 +973,7 @@ def getcomments(object):
 
 class EndOfBlock(Exception): pass
 
-class BlockFinder:
+class BlockFinder(object):
     """Provide a tokeneater() method to detect the end of a code block."""
     def __init__(self):
         self.indent = 0
@@ -1986,7 +1986,7 @@ def _signature_strip_non_python_syntax(signature):
     last_positional_only = None
 
     lines = [l.encode('ascii') for l in signature.split('\n')]
-    generator = iter(lines).__next__
+    generator = functools.partial(next, iter(lines))
     token_stream = tokenize.tokenize(generator)
 
     delayed_comma = False
@@ -2491,11 +2491,11 @@ def _signature_from_callable(obj,
     raise ValueError('callable {!r} is not supported by signature'.format(obj))
 
 
-class _void:
+class _void(object):
     """A private marker - used in Parameter & Signature."""
 
 
-class _empty:
+class _empty(object):
     """Marker object for Signature.empty and Parameter.empty."""
 
 
@@ -2706,7 +2706,7 @@ class Parameter(object):
                 self._annotation == other._annotation)
 
 
-class BoundArguments:
+class BoundArguments(object):
     """Result of `Signature.bind` call.  Holds the mapping of arguments
     to the function's parameters.
 
@@ -2821,6 +2821,11 @@ class BoundArguments:
             return NotImplemented
         return (self.signature == other.signature and
                 self.arguments == other.arguments)
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    __hash__ = None
 
     def __setstate__(self, state):
         self._signature = state['_signature']

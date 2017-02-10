@@ -79,7 +79,7 @@ def func77(): pass
 extra79 = 'stop'
 
 # line 81
-class cls82:
+class cls82(object):
     def func83(): pass
 (extra84, stuff84) = 'xy'
 extra85 = 'stop'
@@ -91,7 +91,7 @@ def func88():
 
 # line 92
 def f():
-    class X:
+    class X(object):
         def g():
             "doc"
             return 42
@@ -102,7 +102,7 @@ method_in_dynamic_class = f().g
 def func114():
     return 115
 
-class ClassWithMethod:
+class ClassWithMethod(object):
     def method(self):
         pass
 
