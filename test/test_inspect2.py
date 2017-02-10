@@ -818,7 +818,7 @@ class TestClassesAndFunctions(unittest.TestCase):
         def check_method(f):
             self.assertArgSpecEquals(f, ['self', 'x', 'y'],
                                         formatted='(self, x, y)')
-        class C:
+        class C(object):
             @six.wraps(mod.spam)
             def ham(self, x, y):
                 pass
@@ -835,13 +835,13 @@ class TestClassesAndFunctions(unittest.TestCase):
             check_method(C.pham)
             check_method(C().pham)
 
-        class C_new:
+        class C_new(object):
             @six.wraps(mod.spam)
             def __new__(self, x, y):
                 pass
         check_method(C_new)
 
-        class C_init:
+        class C_init(object):
             @six.wraps(mod.spam)
             def __init__(self, x, y):
                 pass
