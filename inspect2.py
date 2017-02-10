@@ -2508,7 +2508,7 @@ try:
 except ImportError:
     class _NamedConstant(int):
         def __new__(self, value, name):
-            val = super().__new__(_NamedConstant, value)
+            val = super(_NamedConstant, self).__new__(_NamedConstant, value)
             val._name = name
             return val
 
