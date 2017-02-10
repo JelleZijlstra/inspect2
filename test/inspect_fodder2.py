@@ -106,7 +106,7 @@ class ClassWithMethod(object):
     def method(self):
         pass
 
-from functools import wraps
+from six import wraps
 
 def decorator(func):
     @wraps(func)

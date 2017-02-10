@@ -3243,9 +3243,11 @@ def _main():
     if args.details:
         print('Target: {}'.format(target))
         print('Origin: {}'.format(getsourcefile(module)))
-        print('Cached: {}'.format(module.__cached__))
+        if hasattr(module, '__cached__'):
+            print('Cached: {}'.format(module.__cached__))
         if obj is module:
-            print('Loader: {}'.format(repr(module.__loader__)))
+            if hasattr(module, '__loader__'):
+                print('Loader: {}'.format(repr(module.__loader__)))
             if hasattr(module, '__path__'):
                 print('Submodule search path: {}'.format(module.__path__))
         else:

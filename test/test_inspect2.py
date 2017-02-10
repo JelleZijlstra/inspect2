@@ -1144,7 +1144,10 @@ class TestClassesAndFunctions(unittest.TestCase):
                 pass
 
         self.assertIn(('f', B.f), inspect.getmembers(B))
-        self.assertNotIn(('f', B.f), inspect.getmembers(B, inspect.ismethod))
+        if six.PY3:
+            self.assertNotIn(('f', B.f), inspect.getmembers(B, inspect.ismethod))
+        else:
+            self.assertIn(('f', B.f), inspect.getmembers(B, inspect.ismethod))
         b = B()
         self.assertIn(('f', b.f), inspect.getmembers(b))
         self.assertIn(('f', b.f), inspect.getmembers(b, inspect.ismethod))
@@ -3962,8 +3965,12 @@ class TestMain(unittest.TestCase):
         output = out.decode()
         # Just a quick sanity check on the output
         self.assertIn(module.__name__, output)
-        self.assertIn(module.__file__, output)
-        self.assertIn(module.__cached__, output)
+        filename = module.__file__
+        if filename.endswith('.pyc'):
+            filename = filename[:-1]
+        self.assertIn(filename, output)
+        if hasattr(module, '__cached__'):
+            self.assertIn(module.__cached__, output)
         self.assertEqual(err, b'')
 
 
