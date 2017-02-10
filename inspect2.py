@@ -452,7 +452,7 @@ def classify_class_attrs(cls):
 
     mro = getmro(cls)
     metamro = getmro(type(cls)) # for attributes stored in the metaclass
-    metamro = tuple([cls for cls in metamro if cls not in (type, object)])
+    metamro = tuple([mro_cls for mro_cls in metamro if mro_cls not in (type, object)])
     class_bases = (cls,) + mro
     all_bases = class_bases + metamro
     names = dir(cls)
