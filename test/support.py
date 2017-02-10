@@ -417,7 +417,9 @@ def run_python_until_end(*args, **env_vars):
         isolated = env_vars.pop('__isolated')
     else:
         isolated = not env_vars and not env_required
-    cmd_line = [sys.executable, '-X', 'faulthandler']
+    cmd_line = [sys.executable]
+    if sys.version_info[0] >= 3:
+        cmd_line += ['-X', 'faulthandler']
     if isolated and has_isolated_mode():
         # isolated mode: ignore Python environment variables, ignore user
         # site-packages, and don't add the current directory to sys.path

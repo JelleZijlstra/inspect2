@@ -807,7 +807,7 @@ class TestClassesAndFunctions(unittest.TestCase):
 
     def test_argspec_api_ignores_wrapped(self):
         # Issue 20684: low level introspection API must ignore __wrapped__
-        @functools.wraps(mod.spam)
+        @six.wraps(mod.spam)
         def ham(x, y):
             pass
         # Basic check
@@ -820,13 +820,13 @@ class TestClassesAndFunctions(unittest.TestCase):
             self.assertArgSpecEquals(f, ['self', 'x', 'y'],
                                         formatted='(self, x, y)')
         class C:
-            @functools.wraps(mod.spam)
+            @six.wraps(mod.spam)
             def ham(self, x, y):
                 pass
 
             if hasattr(functools, 'partialmethod'):
                 pham = functools.partialmethod(ham)
-            @functools.wraps(mod.spam)
+            @six.wraps(mod.spam)
             def __call__(self, x, y):
                 pass
         check_method(C())
@@ -837,13 +837,13 @@ class TestClassesAndFunctions(unittest.TestCase):
             check_method(C().pham)
 
         class C_new:
-            @functools.wraps(mod.spam)
+            @six.wraps(mod.spam)
             def __new__(self, x, y):
                 pass
         check_method(C_new)
 
         class C_init:
-            @functools.wraps(mod.spam)
+            @six.wraps(mod.spam)
             def __init__(self, x, y):
                 pass
         check_method(C_init)
@@ -2260,7 +2260,7 @@ def test(a, b:'foo'=10, *args:'bar', spam:'baz', ham=123, **kwargs:int):
         func = _testcapi.docstring_with_signature_with_defaults
 
         def decorator(func):
-            @functools.wraps(func)
+            @six.wraps(func)
             def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
             return wrapper
@@ -2409,7 +2409,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
         class Test:
             def m1(self, arg1, arg2=1):
                 pass
-        @functools.wraps(Test().m1)
+        @six.wraps(Test().m1)
         def m1d(*args, **kwargs):
             pass
         self.assertEqual(self.signature(m1d),
@@ -2753,7 +2753,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
         import functools
 
         def decorator(func):
-            @functools.wraps(func)
+            @six.wraps(func)
             def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
             return wrapper
@@ -2783,7 +2783,7 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
 
         # Test that we handle method wrappers correctly
         def decorator(func):
-            @functools.wraps(func)
+            @six.wraps(func)
             def wrapper(*args, **kwargs):
                 return func(42, *args, **kwargs)
             sig = inspect.signature(func)
@@ -3843,7 +3843,7 @@ def func(a, b):
     return a + b
 wrapper = func
 for __ in range(10):
-    @functools.wraps(wrapper)
+    @six.wraps(wrapper)
     def wrapper():
         pass
 
@@ -3857,7 +3857,7 @@ class TestUnwrap(unittest.TestCase):
 
     def test_unwrap_one(self):
         def decorator(fn):
-            @functools.wraps(fn)
+            @six.wraps(fn)
             def wrapper(*args, **kwargs):
                 return fn(*args, **kwargs)
             if not hasattr(wrapper, '__wrapped__'):
@@ -3875,7 +3875,7 @@ class TestUnwrap(unittest.TestCase):
             return a + b
         wrapper = func
         for __ in range(10):
-            @functools.wraps(wrapper)
+            @six.wraps(wrapper)
             def wrapper():
                 pass
         if HAVE_MULTILEVEL_WRAPPED:
@@ -3886,10 +3886,10 @@ class TestUnwrap(unittest.TestCase):
     def test_stop(self):
         def func1(a, b):
             return a + b
-        @functools.wraps(func1)
+        @six.wraps(func1)
         def func2():
             pass
-        @functools.wraps(func2)
+        @six.wraps(func2)
         def wrapper():
             pass
         func2.stop_here = 1

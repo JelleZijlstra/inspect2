@@ -2705,6 +2705,9 @@ class Parameter(object):
                 self._default == other._default and
                 self._annotation == other._annotation)
 
+    def __ne__(self, other):
+        return not (self == other)
+
 
 class BoundArguments(object):
     """Result of `Signature.bind` call.  Holds the mapping of arguments
