@@ -1,4 +1,4 @@
-VERSION = '0.1'
+VERSION = '0.1.1'
 DESCRIPTION = 'Backport of the Python 3.6 inspect module to Python 2.7-3.5'
 
 classifiers = [
@@ -29,6 +29,7 @@ if __name__ == '__main__':
         version=VERSION,
         description=DESCRIPTION,
         long_description=readme,
+        long_description_content_type='text/markdown',
         url='https://github.com/JelleZijlstra/inspect2',
         author='Jelle Zijlstra',
         author_email='jelle.zijlstra@gmail.com',
