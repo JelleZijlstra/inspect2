@@ -2920,19 +2920,20 @@ def test(a,b, *args, kwonly=True, kwonlyreq, **kwargs):
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
                      "Signature information for builtins requires docstrings")
     def test_signature_on_builtin_class(self):
+        if sys.version_info >= (3, 8):
+            pickler_sig = '(file, protocol=None, fix_imports=True, buffer_callback=None)'
+        else:
+            pickler_sig = '(file, protocol=None, fix_imports=True)'
         if hasattr(Pickler, '__text_signature__'):
-            self.assertEqual(str(inspect.signature(Pickler)),
-                             '(file, protocol=None, fix_imports=True)')
+            self.assertEqual(str(inspect.signature(Pickler)), pickler_sig)
 
         class P(Pickler): pass
         class EmptyTrait: pass
         class P2(EmptyTrait, P): pass
 
         if hasattr(Pickler, '__text_signature__'):
-            self.assertEqual(str(inspect.signature(P)),
-                             '(file, protocol=None, fix_imports=True)')
-            self.assertEqual(str(inspect.signature(P2)),
-                             '(file, protocol=None, fix_imports=True)')
+            self.assertEqual(str(inspect.signature(P)), pickler_sig)
+            self.assertEqual(str(inspect.signature(P2)), pickler_sig)
 
         class P3(P2):
             def __init__(self, spam):
