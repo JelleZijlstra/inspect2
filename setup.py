@@ -1,4 +1,4 @@
-VERSION = '0.1.1'
+VERSION = '0.1.2'
 DESCRIPTION = 'Backport of the Python 3.6 inspect module to Python 2.7-3.5'
 
 classifiers = [
